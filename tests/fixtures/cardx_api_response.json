@@ -1,0 +1,35 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "cx-001",
+        "slug": "starbucks-discount-20",
+        "title": "รับส่วนลด 20% ที่ Starbucks",
+        "description": "ใช้จ่ายผ่านบัตร CardX ที่ Starbucks ทุกสาขา รับส่วนลด 20%",
+        "imageUrl": "https://cdn.cardx.co.th/images/starbucks.jpg",
+        "categoryName": "dining",
+        "cardTypes": [{"name": "CardX Platinum"}, {"name": "CardX Gold"}],
+        "merchantName": "Starbucks",
+        "startDate": "2024-01-15",
+        "endDate": "2024-07-31"
+      },
+      {
+        "id": "cx-002",
+        "slug": "central-cashback-1000",
+        "title": "รับเงินคืน 1,000 บาท ที่เซ็นทรัล",
+        "description": "ช้อปครบ 5,000 บาท รับเงินคืน 1,000 บาท ที่ห้างเซ็นทรัลทุกสาขา",
+        "imageUrl": "https://cdn.cardx.co.th/images/central.jpg",
+        "categoryName": "shopping",
+        "cardTypes": [{"name": "CardX Signature"}],
+        "merchantName": "Central Department Store",
+        "startDate": "2024-02-01",
+        "endDate": "2024-12-31"
+      }
+    ]
+  },
+  "meta": {
+    "total": 2,
+    "page": 1,
+    "perPage": 20
+  }
+}

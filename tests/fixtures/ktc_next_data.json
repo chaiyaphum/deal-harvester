@@ -1,0 +1,46 @@
+{
+  "props": {
+    "pageProps": {
+      "promotions": [
+        {
+          "id": "promo-001",
+          "slug": "dining-discount-50-percent",
+          "title": "รับส่วนลด 50% ที่ร้านอาหารชั้นนำ",
+          "description": "ใช้จ่ายผ่านบัตร KTC ที่ร้านอาหารที่ร่วมรายการ รับส่วนลดสูงสุด 50%",
+          "image": "/images/promotions/dining-50.jpg",
+          "category": {"name": "dining", "slug": "dining"},
+          "card_types": [{"name": "KTC VISA Platinum"}, {"name": "KTC Mastercard"}],
+          "start_date": "2024-01-01",
+          "end_date": "2024-06-30",
+          "short_description": "ส่วนลด 50% ร้านอาหาร"
+        },
+        {
+          "id": "promo-002",
+          "slug": "shopping-cashback-500",
+          "title": "รับเงินคืน 500 บาท เมื่อช้อปครบ 3,000 บาท",
+          "description": "ช้อปปิ้งผ่านบัตร KTC ครบ 3,000 บาท รับเงินคืน 500 บาท",
+          "image": "/images/promotions/shopping-cashback.jpg",
+          "category": {"name": "shopping", "slug": "shopping"},
+          "card_types": [{"name": "KTC JCB Platinum"}],
+          "start_date": "2024-02-01",
+          "end_date": "2024-12-31",
+          "short_description": "cashback 500 บาท"
+        },
+        {
+          "id": "promo-003",
+          "slug": "travel-points-5x",
+          "title": "รับคะแนนสะสม 5 เท่า สำหรับการเดินทาง",
+          "description": "จองตั๋วเครื่องบินและโรงแรมผ่านบัตร KTC รับ 5,000 คะแนนพิเศษ",
+          "image": {"url": "/images/promotions/travel-5x.jpg"},
+          "category": {"name": "travel", "slug": "travel"},
+          "card_types": ["KTC VISA Signature"],
+          "start_date": "2024-03-01",
+          "end_date": "2024-09-30"
+        }
+      ]
+    }
+  },
+  "page": "/promotion",
+  "query": {},
+  "buildId": "test-build-123"
+}
