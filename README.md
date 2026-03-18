@@ -1,6 +1,6 @@
 # Card Data Retrieval
 
-Automated credit card promotion scraper for Thai bank websites. Supports 3 banks (KTC, CardX, Kasikorn) with a plugin architecture that makes adding new banks easy.
+Automated credit card promotion scraper for Thai bank websites. Supports 3 banks (KTC, CardX, Kasikorn) with a plugin architecture that makes adding new banks easy. Includes a REST API for querying promotion data.
 
 ---
 
@@ -12,6 +12,8 @@ Automated credit card promotion scraper for Thai bank websites. Supports 3 banks
 - [Installation](#installation)
 - [Usage (CLI)](#usage-cli)
 - [Configuration](#configuration)
+- [REST API](#rest-api)
+- [CI/CD](#cicd)
 - [Component Reference](#component-reference)
   - [Core Layer](#1-core-layer)
   - [Adapters](#2-adapters)
@@ -36,8 +38,9 @@ The system:
 3. **Stores to database** with checksum-based deduplication (re-runs never create duplicates)
 4. **Soft-deletes** promotions that disappear from the source site
 5. **Runs on a schedule** via built-in scheduler
-6. **Logs audit trail** for every scrape run
-7. **Alerts on repeated failures** (3+ consecutive fails per adapter)
+6. **Serves a REST API** for querying promotions, stats, and scrape history
+7. **Logs audit trail** for every scrape run
+8. **Alerts on repeated failures** (3+ consecutive fails per adapter)
 
 | Bank | Website | Difficulty | Scraping Method |
 |------|---------|-----------|-----------------|
@@ -50,43 +53,46 @@ The system:
 ## Architecture
 
 ```
-                ┌─────────────┐
-                │  CLI (typer) │
-                │  / Scheduler │
-                └──────┬──────┘
-                       │
-                       v
-              ┌────────────────┐
-              │   Pipeline     │   <-- orchestrator: fetch -> parse -> store -> soft-delete
-              │  (pipeline.py) │
-              └────────┬───────┘
-                       │
-          ┌────────────┼────────────┐
-          v            v            v
-   ┌────────────┐ ┌──────────┐ ┌───────────┐
-   │ KTC        │ │ CardX    │ │ Kasikorn  │   <-- each is an Adapter (Strategy Pattern)
-   │ Adapter    │ │ Adapter  │ │ Adapter   │
-   └─────┬──────┘ └────┬─────┘ └─────┬─────┘
-         │              │              │
-         v              v              v
-   ┌──────────┐  ┌───────────┐  ┌────────────┐
-   │ HTTP     │  │ Browser   │  │ Stealth    │   <-- fetcher per technique
-   │ Fetcher  │  │ Fetcher   │  │ Fetcher    │
-   │ (httpx)  │  │(Playwright│  │(Playwright │
-   │          │  │+intercept)│  │+anti-detect│
-   └──────────┘  └───────────┘  └────────────┘
-                       │
-                       v
-              ┌────────────────┐
-              │   Repository   │   <-- upsert + dedup + soft-delete + audit log
-              │  (SQLAlchemy)  │
-              └────────┬───────┘
-                       │
-                       v
-              ┌────────────────┐
-              │   SQLite DB    │   <-- switchable to PostgreSQL via env var
-              └────────────────┘
+                ┌─────────────┐     ┌──────────────┐
+                │  CLI (typer) │     │  FastAPI      │
+                │  / Scheduler │     │  REST API     │
+                └──────┬──────┘     └──────┬───────┘
+                       │                   │
+                       v                   │
+              ┌────────────────┐           │
+              │   Pipeline     │           │
+              │  (pipeline.py) │           │
+              └────────┬───────┘           │
+                       │                   │
+          ┌────────────┼────────────┐      │
+          v            v            v      │
+   ┌────────────┐ ┌──────────┐ ┌───────────┐  │
+   │ KTC        │ │ CardX    │ │ Kasikorn  │  │
+   │ Adapter    │ │ Adapter  │ │ Adapter   │  │
+   └─────┬──────┘ └────┬─────┘ └─────┬─────┘  │
+         │              │              │       │
+         v              v              v       │
+   ┌──────────┐  ┌───────────┐  ┌────────────┐│
+   │ HTTP     │  │ Browser   │  │ Stealth    ││
+   │ Fetcher  │  │ Fetcher   │  │ Fetcher    ││
+   │ (httpx)  │  │(Playwright│  │(Playwright ││
+   │          │  │+intercept)│  │+anti-detect││
+   └──────────┘  └───────────┘  └────────────┘│
+                       │                       │
+                       v                       v
+              ┌────────────────────────────────────┐
+              │           Repository               │
+              │         (SQLAlchemy)                │
+              └────────────────┬───────────────────┘
+                               │
+                               v
+              ┌────────────────────────────────────┐
+              │      PostgreSQL / SQLite            │
+              └────────────────────────────────────┘
 ```
+
+The **CLI/Scheduler** path runs the scraping pipeline: fetch → parse → store → soft-delete.
+The **REST API** path reads directly from the repository to serve promotion data via HTTP.
 
 ### Design Patterns
 
@@ -108,8 +114,14 @@ card-data-retrieval/
 ├── alembic.ini                             # Alembic migration config
 ├── Dockerfile                              # Production Docker image
 ├── docker-compose.yml                      # Docker Compose for deployment
-├── entrypoint.sh                           # Container entrypoint (init-db + migrate + schedule)
+├── entrypoint.sh                           # Container entrypoint (migrate + schedule)
 ├── .dockerignore
+│
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                          # CI: lint (ruff) + test (pytest)
+│       └── deploy.yml                      # CD: auto-deploy to DigitalOcean on main
+│
 ├── alembic/
 │   ├── env.py                              # Alembic environment (uses settings.database_url)
 │   ├── script.py.mako                      # Migration template
@@ -119,6 +131,12 @@ card-data-retrieval/
 │   ├── __init__.py
 │   ├── main.py                             # CLI entry point (typer)
 │   ├── config.py                           # Settings from environment variables
+│   │
+│   ├── api/                                # REST API (FastAPI)
+│   │   ├── app.py                          # FastAPI app, custom Swagger UI with pre-auth
+│   │   ├── auth.py                         # API key authentication (X-API-Key header)
+│   │   ├── routes.py                       # All API endpoints (/api/v1/*)
+│   │   └── schemas.py                      # Pydantic response models
 │   │
 │   ├── core/                               # Core business logic
 │   │   ├── base_adapter.py                 # Abstract base class for adapters
@@ -176,7 +194,7 @@ card-data-retrieval/
 │       └── kasikorn_promotions.html        # Sample Kasikorn HTML page
 │
 └── data/
-    └── promotions.db                       # SQLite database (auto-created)
+    └── promotions.db                       # SQLite database (auto-created, local dev only)
 ```
 
 ---
@@ -279,6 +297,18 @@ Starting scheduler...
 
 Press `Ctrl+C` to stop.
 
+#### `serve` — Start the REST API server
+
+```bash
+# Default: 0.0.0.0:8000
+card-retrieval serve
+
+# Custom host/port
+card-retrieval serve --host 127.0.0.1 --port 3000
+```
+
+Swagger UI is available at `http://<host>:<port>/docs`. ReDoc at `/redoc`.
+
 #### `init-db` — Create database tables
 
 ```bash
@@ -304,6 +334,7 @@ All settings are configured via **environment variables** with the `CARD_RETRIEV
 | `CARD_RETRIEVAL_SCHEDULE_KASIKORN` | `24` | Hours between Kasikorn scrape cycles |
 | `CARD_RETRIEVAL_BROWSER_HEADLESS` | `true` | Run browser in headless mode (set `false` for Kasikorn) |
 | `CARD_RETRIEVAL_BROWSER_TIMEOUT` | `30000` | Browser timeout in milliseconds |
+| `CARD_RETRIEVAL_API_KEYS` | `""` (empty) | Comma-separated API keys for REST API authentication |
 
 Example:
 
@@ -316,6 +347,9 @@ export CARD_RETRIEVAL_LOG_LEVEL="DEBUG"
 
 # Show browser window (required for Kasikorn, useful for debugging)
 export CARD_RETRIEVAL_BROWSER_HEADLESS="false"
+
+# Set API keys (comma-separated for multiple keys)
+export CARD_RETRIEVAL_API_KEYS="my-secret-key-1,my-secret-key-2"
 ```
 
 Or create a `.env` file:
@@ -324,7 +358,226 @@ Or create a `.env` file:
 CARD_RETRIEVAL_DATABASE_URL=sqlite:///data/promotions.db
 CARD_RETRIEVAL_LOG_LEVEL=INFO
 CARD_RETRIEVAL_BROWSER_HEADLESS=true
+CARD_RETRIEVAL_API_KEYS=my-secret-key
 ```
+
+---
+
+## REST API
+
+The REST API provides read-only access to scraped promotion data. It runs as a separate service alongside the scraper/scheduler.
+
+### Base URL
+
+```
+http://<host>:8000/api/v1
+```
+
+- **Swagger UI:** `http://<host>:8000/docs` (pre-authorized with the first configured API key)
+- **ReDoc:** `http://<host>:8000/redoc`
+
+### Authentication
+
+All endpoints except `/health` require an API key via the `X-API-Key` header.
+
+```bash
+curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/promotions
+```
+
+If `CARD_RETRIEVAL_API_KEYS` is empty, any non-empty key is accepted (useful for development).
+
+### Endpoints
+
+#### `GET /api/v1/health` — Health check (public)
+
+No authentication required.
+
+```bash
+curl http://localhost:8000/api/v1/health
+```
+
+```json
+{
+  "status": "ok",
+  "version": "0.1.0",
+  "adapters": ["ktc", "cardx", "kasikorn"]
+}
+```
+
+#### `GET /api/v1/promotions` — List promotions
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `bank` | string | — | Filter by bank (e.g. `ktc`, `cardx`, `kasikorn`) |
+| `category` | string | — | Filter by category slug |
+| `merchant_name` | string | — | Partial match on merchant name |
+| `discount_type` | string | — | Filter by discount type (`percentage`, `cashback`, `discount`, `points`) |
+| `card_type` | string | — | Filter promotions containing this card type |
+| `search` | string | — | Full-text search on title and description |
+| `is_active` | bool | `true` | Filter by active status |
+| `start_date_from` | date | — | Promotions starting on or after this date |
+| `start_date_to` | date | — | Promotions starting on or before this date |
+| `end_date_from` | date | — | Promotions ending on or after this date |
+| `end_date_to` | date | — | Promotions ending on or before this date |
+| `min_spend_min` | float | — | Minimum spend >= value |
+| `min_spend_max` | float | — | Minimum spend <= value |
+| `sort_by` | string | `scraped_at` | Sort field |
+| `sort_order` | string | `desc` | `asc` or `desc` |
+| `page` | int | `1` | Page number (>= 1) |
+| `page_size` | int | `20` | Items per page (1-100) |
+
+```bash
+# All active KTC promotions with cashback
+curl -H "X-API-Key: your-key" \
+  "http://localhost:8000/api/v1/promotions?bank=ktc&discount_type=cashback"
+
+# Search promotions expiring after 2025-01-01
+curl -H "X-API-Key: your-key" \
+  "http://localhost:8000/api/v1/promotions?end_date_from=2025-01-01&search=starbucks"
+```
+
+```json
+{
+  "items": [
+    {
+      "id": "abc-123",
+      "bank": "ktc",
+      "source_id": "promo-456",
+      "source_url": "https://www.ktc.co.th/promotion/...",
+      "title": "Starbucks 15% Cashback",
+      "description": "...",
+      "image_url": "https://...",
+      "card_types": ["KTC VISA PLATINUM"],
+      "category": "dining-restaurants",
+      "merchant_name": "Starbucks",
+      "discount_type": "cashback",
+      "discount_value": "15%",
+      "minimum_spend": 300.0,
+      "start_date": "2025-01-01",
+      "end_date": "2025-06-30",
+      "terms_and_conditions": "...",
+      "is_active": true,
+      "scraped_at": "2025-03-15T10:30:00",
+      "created_at": "2025-03-15T10:30:00",
+      "updated_at": "2025-03-15T10:30:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20,
+  "pages": 1
+}
+```
+
+#### `GET /api/v1/promotions/{id}` — Get a single promotion
+
+```bash
+curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/promotions/abc-123
+```
+
+Returns a single `PromotionResponse` object, or `404` if not found.
+
+#### `GET /api/v1/scrape-runs` — Scrape run history
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `bank` | string | — | Filter by bank |
+| `status` | string | — | Filter by status (`running`, `success`, `failed`) |
+| `from_date` | datetime | — | Runs started after this time |
+| `to_date` | datetime | — | Runs started before this time |
+| `page` | int | `1` | Page number |
+| `page_size` | int | `20` | Items per page (1-100) |
+
+```bash
+curl -H "X-API-Key: your-key" "http://localhost:8000/api/v1/scrape-runs?bank=ktc&status=success"
+```
+
+```json
+{
+  "items": [
+    {
+      "id": "run-789",
+      "bank": "ktc",
+      "started_at": "2025-03-15T10:00:00",
+      "finished_at": "2025-03-15T10:00:32",
+      "status": "success",
+      "promotions_found": 160,
+      "promotions_new": 3,
+      "promotions_updated": 1,
+      "error_message": null
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20,
+  "pages": 1
+}
+```
+
+#### `GET /api/v1/stats` — Promotion statistics per bank
+
+```bash
+curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/stats
+```
+
+```json
+[
+  {"bank": "ktc", "total": 160, "active": 155},
+  {"bank": "cardx", "total": 14, "active": 14},
+  {"bank": "kasikorn", "total": 49, "active": 45}
+]
+```
+
+#### `GET /api/v1/filters` — Available filter options
+
+Returns the distinct values currently in the database, useful for building filter UIs.
+
+```bash
+curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/filters
+```
+
+```json
+{
+  "banks": ["cardx", "kasikorn", "ktc"],
+  "categories": ["dining-restaurants", "shopping", "travel", "..."],
+  "discount_types": ["cashback", "discount", "percentage", "points"],
+  "card_types": ["KTC VISA PLATINUM", "..."],
+  "merchant_names": ["Starbucks", "..."]
+}
+```
+
+---
+
+## CI/CD
+
+The project uses GitHub Actions for continuous integration and deployment.
+
+### CI Workflow (`.github/workflows/ci.yml`)
+
+Runs on every push to `main` and on pull requests targeting `main`:
+
+1. **Lint** — `ruff check` and `ruff format --check` on `src/` and `tests/`
+2. **Test** — `pytest tests/ -v` (runs after lint passes)
+
+### Deploy Workflow (`.github/workflows/deploy.yml`)
+
+Triggered automatically when the CI workflow succeeds on `main`:
+
+1. SSHs into the DigitalOcean droplet
+2. Pulls the latest code (`git pull origin main`)
+3. Rebuilds and restarts Docker containers (`docker compose up -d --build --force-recreate`)
+4. Cleans up old Docker images
+
+```
+Push to main → CI (lint + test) → Deploy (SSH → git pull → docker compose up)
+```
+
+### Required GitHub Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `DROPLET_HOST` | DigitalOcean droplet IP address |
+| `DROPLET_SSH_KEY` | SSH private key for root access to the droplet |
 
 ---
 
@@ -696,7 +949,7 @@ Repository.deactivate_missing()  <-- soft-delete removed promotions
 PromotionRow (SQLAlchemy)        <-- written to DB
     │
     v
-SQLite / PostgreSQL
+PostgreSQL / SQLite
 ```
 
 ### Discount Types
@@ -725,22 +978,22 @@ alembic upgrade head
 alembic current
 ```
 
-### Querying SQLite directly
+### Example Queries
 
-```bash
-sqlite3 data/promotions.db
+These queries work for both SQLite (local dev) and PostgreSQL (production):
 
-# Count promotions per bank
-SELECT bank, COUNT(*) FROM promotions WHERE is_active = 1 GROUP BY bank;
+```sql
+-- Count promotions per bank
+SELECT bank, COUNT(*) FROM promotions WHERE is_active = true GROUP BY bank;
 
-# Latest promotions
+-- Latest promotions
 SELECT bank, title, discount_type, discount_value, end_date
 FROM promotions
-WHERE is_active = 1
+WHERE is_active = true
 ORDER BY scraped_at DESC
 LIMIT 10;
 
-# Scrape run history
+-- Scrape run history
 SELECT bank, status, promotions_found, promotions_new, started_at
 FROM scrape_runs
 ORDER BY started_at DESC
@@ -876,24 +1129,44 @@ ruff format src/ tests/
 
 ## Deployment
 
-### Docker
+### Docker Compose
 
-```bash
-# Build the image
-docker build -t card-retrieval .
+The production setup runs two services:
 
-# Smoke test
-docker run --rm card-retrieval list-adapters
+```yaml
+services:
+  scraper:
+    build: .
+    environment:
+      - CARD_RETRIEVAL_DATABASE_URL=${CARD_RETRIEVAL_DATABASE_URL}
+      - CARD_RETRIEVAL_BROWSER_HEADLESS=false
+    entrypoint: ["/app/entrypoint.sh"]
+    restart: unless-stopped
 
-# Run with Docker Compose
-docker-compose up -d
-docker-compose logs -f
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - CARD_RETRIEVAL_DATABASE_URL=${CARD_RETRIEVAL_DATABASE_URL}
+      - CARD_RETRIEVAL_API_KEYS=${CARD_RETRIEVAL_API_KEYS}
+    command: ["serve"]
+    restart: unless-stopped
 ```
 
-The `entrypoint.sh` handles initialization:
-1. `card-retrieval init-db` — create tables
-2. `alembic upgrade head` — run migrations
-3. `card-retrieval schedule` — start the scheduler
+- **scraper** — runs `entrypoint.sh` which executes Alembic migrations then starts the scheduler with `xvfb-run` (for headed Kasikorn scraping)
+- **api** — runs `card-retrieval serve` on port 8000
+
+```bash
+# Build and start both services
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# Restart just the API
+docker compose restart api
+```
 
 ### Important: Kasikorn requires headed mode
 
@@ -925,6 +1198,9 @@ The Playwright Docker base image (`mcr.microsoft.com/playwright/python`) include
 # Use PostgreSQL instead of SQLite
 export CARD_RETRIEVAL_DATABASE_URL="postgresql://user:pass@localhost:5432/card_promo"
 
+# Set API keys for the REST API
+export CARD_RETRIEVAL_API_KEYS="your-production-key"
+
 # Enable JSON logging
 export CARD_RETRIEVAL_LOG_JSON="true"
 
@@ -935,5 +1211,5 @@ alembic upgrade head
 playwright install --with-deps chromium
 
 # Health check
-card-retrieval history --limit 3
+curl http://localhost:8000/api/v1/health
 ```
