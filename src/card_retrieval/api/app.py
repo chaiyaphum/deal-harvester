@@ -41,6 +41,7 @@ window.addEventListener('load', function() {{
 }});
 </script>
 </body>"""
-        html.body = html.body.replace(b"</body>", inject.encode())
+        content = html.body.replace(b"</body>", inject.encode())
+        return HTMLResponse(content=content)
 
     return html
