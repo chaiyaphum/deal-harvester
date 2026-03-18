@@ -1,9 +1,13 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 
 from card_retrieval.api.routes import router
 from card_retrieval.config import settings
+
+_static_dir = Path(__file__).resolve().parent.parent / "static"
 
 api = FastAPI(
     title="Card Data Retrieval API",
@@ -14,6 +18,19 @@ api = FastAPI(
 )
 
 api.include_router(router)
+
+
+@api.get("/", include_in_schema=False)
+def dashboard() -> HTMLResponse:
+    api_key = ""
+    if settings.api_keys:
+        api_key = settings.api_keys.split(",")[0].strip()
+    content = (_static_dir / "index.html").read_text()
+    content = content.replace(
+        "<!--API_KEY_PLACEHOLDER-->",
+        f'<script>window.__API_KEY__="{api_key}";</script>',
+    )
+    return HTMLResponse(content=content)
 
 
 @api.get("/docs", include_in_schema=False)
