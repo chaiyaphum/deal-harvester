@@ -12,6 +12,7 @@ Automated credit card promotion scraper for Thai bank websites. Supports 3 banks
 - [Installation](#installation)
 - [Usage (CLI)](#usage-cli)
 - [Configuration](#configuration)
+- [Dashboard UI](#dashboard-ui)
 - [REST API](#rest-api)
 - [CI/CD](#cicd)
 - [Component Reference](#component-reference)
@@ -39,8 +40,9 @@ The system:
 4. **Soft-deletes** promotions that disappear from the source site
 5. **Runs on a schedule** via built-in scheduler
 6. **Serves a REST API** for querying promotions, stats, and scrape history
-7. **Logs audit trail** for every scrape run
-8. **Alerts on repeated failures** (3+ consecutive fails per adapter)
+7. **Dashboard UI** at `/` — browse promotions with filters, search, pagination, and stats
+8. **Logs audit trail** for every scrape run
+9. **Alerts on repeated failures** (3+ consecutive fails per adapter)
 
 | Bank | Website | Difficulty | Scraping Method |
 |------|---------|-----------|-----------------|
@@ -53,10 +55,19 @@ The system:
 ## Architecture
 
 ```
-                ┌─────────────┐     ┌──────────────┐
-                │  CLI (typer) │     │  FastAPI      │
-                │  / Scheduler │     │  REST API     │
-                └──────┬──────┘     └──────┬───────┘
+                                    ┌──────────────────┐
+                                    │  Cloudflare CDN  │
+                                    │  (SSL + Proxy)   │
+                                    └────────┬─────────┘
+                                             │
+                                    ┌────────v─────────┐
+                                    │  Nginx (port 80) │
+                                    └────────┬─────────┘
+                                             │
+                ┌─────────────┐     ┌────────v─────────┐
+                │  CLI (typer) │     │  FastAPI          │
+                │  / Scheduler │     │  REST API + UI    │
+                └──────┬──────┘     └──────┬───────────┘
                        │                   │
                        v                   │
               ┌────────────────┐           │
@@ -117,6 +128,9 @@ card-data-retrieval/
 ├── entrypoint.sh                           # Container entrypoint (migrate + schedule)
 ├── .dockerignore
 │
+├── nginx/
+│   └── default.conf                       # Nginx reverse proxy config (port 80 -> app:8000)
+│
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                          # CI: lint (ruff) + test (pytest)
@@ -133,10 +147,13 @@ card-data-retrieval/
 │   ├── config.py                           # Settings from environment variables
 │   │
 │   ├── api/                                # REST API (FastAPI)
-│   │   ├── app.py                          # FastAPI app, custom Swagger UI with pre-auth
+│   │   ├── app.py                          # FastAPI app, dashboard route, custom Swagger UI
 │   │   ├── auth.py                         # API key authentication (X-API-Key header)
 │   │   ├── routes.py                       # All API endpoints (/api/v1/*)
 │   │   └── schemas.py                      # Pydantic response models
+│   │
+│   ├── static/                             # Frontend assets
+│   │   └── index.html                      # Dashboard UI (Tailwind CSS + vanilla JS)
 │   │
 │   ├── core/                               # Core business logic
 │   │   ├── base_adapter.py                 # Abstract base class for adapters
@@ -307,7 +324,7 @@ card-retrieval serve
 card-retrieval serve --host 127.0.0.1 --port 3000
 ```
 
-Swagger UI is available at `http://<host>:<port>/docs`. ReDoc at `/redoc`.
+Dashboard at `http://<host>:<port>/`, Swagger UI at `/docs`, ReDoc at `/redoc`.
 
 #### `init-db` — Create database tables
 
@@ -363,6 +380,35 @@ CARD_RETRIEVAL_API_KEYS=my-secret-key
 
 ---
 
+## Dashboard UI
+
+A single-page dashboard served at `/` for browsing promotions visually.
+
+- **Live:** [https://deals.biggo-analytics.dev](https://deals.biggo-analytics.dev)
+- **Tech:** Single HTML file with Tailwind CSS (CDN) + vanilla JavaScript — no build step, no npm
+- **Source:** `src/card_retrieval/static/index.html`
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Stats cards** | Per-bank totals (total/active) with blue accent border |
+| **Filter panel** | 5 dropdowns (bank, category, discount type, card type, merchant) + text search + active toggle |
+| **Promotions table** | Sortable, clickable rows linking to source URL, truncated titles, color-coded badges |
+| **Pagination** | Page size selector (10/20/50/100), prev/next, page numbers with ellipsis |
+| **Responsive** | Desktop (full table), tablet (2-col filters, scroll table), mobile (stacked) |
+| **API key modal** | Shown if no key available; saves to localStorage |
+| **Server-injected key** | API key auto-injected via `<!--API_KEY_PLACEHOLDER-->` replacement (same as Swagger UI) |
+
+### Color Coding
+
+- **Green badge/dot:** active promotions, cashback discounts
+- **Blue badge:** percentage discounts, bank names
+- **Amber text:** promotions expiring within 7 days
+- **Red text/dot:** expired promotions, inactive status
+
+---
+
 ## REST API
 
 The REST API provides read-only access to scraped promotion data. It runs as a separate service alongside the scraper/scheduler.
@@ -370,11 +416,12 @@ The REST API provides read-only access to scraped promotion data. It runs as a s
 ### Base URL
 
 ```
-http://<host>:8000/api/v1
+https://deals.biggo-analytics.dev/api/v1
 ```
 
-- **Swagger UI:** `http://<host>:8000/docs` (pre-authorized with the first configured API key)
-- **ReDoc:** `http://<host>:8000/redoc`
+- **Dashboard:** `https://deals.biggo-analytics.dev/` (promotion browser with filters and stats)
+- **Swagger UI:** `https://deals.biggo-analytics.dev/docs` (pre-authorized with the first configured API key)
+- **ReDoc:** `https://deals.biggo-analytics.dev/redoc`
 
 ### Authentication
 
@@ -1131,31 +1178,31 @@ ruff format src/ tests/
 
 ### Docker Compose
 
-The production setup runs two services:
+The production setup runs three services:
 
 ```yaml
 services:
-  scraper:
-    build: .
-    environment:
-      - CARD_RETRIEVAL_DATABASE_URL=${CARD_RETRIEVAL_DATABASE_URL}
-      - CARD_RETRIEVAL_BROWSER_HEADLESS=false
-    entrypoint: ["/app/entrypoint.sh"]
-    restart: unless-stopped
-
-  api:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - CARD_RETRIEVAL_DATABASE_URL=${CARD_RETRIEVAL_DATABASE_URL}
-      - CARD_RETRIEVAL_API_KEYS=${CARD_RETRIEVAL_API_KEYS}
-    command: ["serve"]
-    restart: unless-stopped
+  scraper:    # Scheduled scraping (entrypoint.sh → migrate + xvfb-run scheduler)
+  api:        # FastAPI app on port 8000 (dashboard + REST API)
+  nginx:      # Reverse proxy: port 80 → api:8000 (for Cloudflare)
 ```
 
 - **scraper** — runs `entrypoint.sh` which executes Alembic migrations then starts the scheduler with `xvfb-run` (for headed Kasikorn scraping)
-- **api** — runs `card-retrieval serve` on port 8000
+- **api** — runs `card-retrieval serve` on port 8000, serves dashboard at `/` and API at `/api/v1/*`
+- **nginx** — lightweight `nginx:alpine` container, proxies port 80 to the API service
+
+### Domain & Cloudflare
+
+The dashboard is publicly accessible at **https://deals.biggo-analytics.dev**.
+
+```
+User → https://deals.biggo-analytics.dev (port 443)
+  → Cloudflare (SSL termination + CDN + DDoS protection)
+    → Origin server port 80 (Nginx)
+      → api:8000 (FastAPI)
+```
+
+DNS: `A` record `deals.biggo-analytics.dev → 157.245.146.136` (Cloudflare Proxied)
 
 ```bash
 # Build and start both services
