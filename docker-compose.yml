@@ -16,8 +16,8 @@ services:
       - CARD_RETRIEVAL_DATABASE_URL=${CARD_RETRIEVAL_DATABASE_URL}
       - CARD_RETRIEVAL_API_KEYS=${CARD_RETRIEVAL_API_KEYS}
       - CARD_RETRIEVAL_BROWSER_HEADLESS=false
-    entrypoint: ["xvfb-run", "card-retrieval"]
-    command: ["serve"]
+    entrypoint: ["/bin/bash", "-c", "xvfb-run card-retrieval serve"]
+    command: []
     restart: unless-stopped
 
   nginx:
