@@ -1,11 +1,12 @@
 #!/bin/bash
 set -e
 
-echo "Initializing database..."
-card-retrieval init-db
-
 echo "Running Alembic migrations..."
-alembic upgrade head
+alembic upgrade head || {
+    echo "Migration failed, stamping head and retrying..."
+    alembic stamp head
+    alembic upgrade head
+}
 
 echo "Starting scheduler..."
 exec xvfb-run card-retrieval schedule
