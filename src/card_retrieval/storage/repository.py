@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from card_retrieval.core.models import Promotion, ScrapeRun
 from card_retrieval.storage.database import get_session
@@ -98,7 +98,24 @@ class PromotionRepository:
         self.session.add(row)
         self.session.commit()
 
-    def get_promotions(self, bank: str | None = None, active_only: bool = True) -> list[PromotionRow]:
+    def deactivate_missing(self, bank: str, active_source_ids: list[str]) -> int:
+        """Set is_active=False for promotions not in the current scrape."""
+        stmt = (
+            update(PromotionRow)
+            .where(
+                PromotionRow.bank == bank,
+                PromotionRow.is_active.is_(True),
+                PromotionRow.source_id.notin_(active_source_ids),
+            )
+            .values(is_active=False)
+        )
+        result = self.session.execute(stmt)
+        self.session.commit()
+        return result.rowcount
+
+    def get_promotions(
+        self, bank: str | None = None, active_only: bool = True,
+    ) -> list[PromotionRow]:
         stmt = select(PromotionRow)
         if bank:
             stmt = stmt.where(PromotionRow.bank == bank)

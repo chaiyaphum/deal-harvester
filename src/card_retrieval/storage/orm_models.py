@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import JSON, DateTime, Float, String, Text
+from sqlalchemy import JSON, DateTime, Float, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -37,7 +37,8 @@ class PromotionRow(Base):
     )
 
     __table_args__ = (
-        # Unique constraint on bank + source_id for upsert
+        UniqueConstraint("bank", "source_id", name="uq_bank_source_id"),
+        Index("ix_bank_source_id", "bank", "source_id"),
         {"sqlite_autoincrement": False},
     )
 

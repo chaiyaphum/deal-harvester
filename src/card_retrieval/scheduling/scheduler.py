@@ -25,7 +25,7 @@ def _run_bank(bank: str):
                 found=r.promotions_found,
             )
 
-    asyncio.get_event_loop().create_task(_job())
+    asyncio.get_running_loop().create_task(_job())
 
 
 def create_scheduler() -> AsyncIOScheduler:

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import structlog
 
-from card_retrieval.adapters.ktc.constants import BANK_NAME, CATEGORIES, PROMOTION_URL, RATE_LIMIT_SECONDS
+from card_retrieval.adapters.ktc.constants import (
+    BANK_NAME,
+    CATEGORIES,
+    PROMOTION_URL,
+    RATE_LIMIT_SECONDS,
+)
 from card_retrieval.adapters.ktc.parser import (
     extract_next_data,
     parse_promotions_from_html,

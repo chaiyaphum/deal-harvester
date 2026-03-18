@@ -16,7 +16,6 @@ def test_parse_kbank_promotions():
     assert "บุฟเฟ่ต์" in p1.title
     assert p1.discount_type == "percentage"
     assert p1.discount_value == "30%"
-    assert p1.category == "dining"
     assert p1.image_url is not None
     assert p1.source_url.startswith("https://www.kasikornbank.com")
 

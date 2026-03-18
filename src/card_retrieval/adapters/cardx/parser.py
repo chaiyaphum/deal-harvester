@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 import structlog
 
-from card_retrieval.adapters.cardx.constants import BASE_URL, BANK_NAME
+from card_retrieval.adapters.cardx.constants import BANK_NAME, BASE_URL
 from card_retrieval.core.models import Promotion
 from card_retrieval.utils.text import extract_discount, normalize_thai_text
 

@@ -2,11 +2,13 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
+_default_db_path = Path(__file__).resolve().parent.parent.parent / "data" / "promotions.db"
+
 
 class Settings(BaseSettings):
     model_config = {"env_prefix": "CARD_RETRIEVAL_"}
 
-    database_url: str = f"sqlite:///{Path(__file__).resolve().parent.parent.parent / 'data' / 'promotions.db'}"
+    database_url: str = f"sqlite:///{_default_db_path}"
     log_level: str = "INFO"
     log_json: bool = False
 

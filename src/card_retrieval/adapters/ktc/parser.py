@@ -6,7 +6,7 @@ from datetime import date, datetime
 import structlog
 from bs4 import BeautifulSoup
 
-from card_retrieval.adapters.ktc.constants import BASE_URL, BANK_NAME
+from card_retrieval.adapters.ktc.constants import BANK_NAME, BASE_URL
 from card_retrieval.core.models import Promotion
 from card_retrieval.utils.text import extract_discount, normalize_thai_text
 

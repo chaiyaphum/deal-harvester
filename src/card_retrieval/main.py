@@ -37,6 +37,7 @@ def _ensure_db():
 @app.command()
 def run(
     bank: Optional[str] = typer.Option(None, "--bank", "-b", help="Run specific bank adapter"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Fetch and parse but skip DB writes"),
 ):
     """Run promotion scraping pipeline."""
     _ensure_db()
@@ -47,8 +48,10 @@ def run(
 
     banks = [bank] if bank else None
 
-    console.print(f"[bold]Starting scrape{'  for ' + bank if bank else ' for all banks'}...[/bold]")
-    results = asyncio.run(run_pipeline(banks=banks))
+    label = "DRY RUN " if dry_run else ""
+    scope = f"  for {bank}" if bank else " for all banks"
+    console.print(f"[bold]{label}Starting scrape{scope}...[/bold]")
+    results = asyncio.run(run_pipeline(banks=banks, dry_run=dry_run))
 
     for r in results:
         status_color = "green" if r.status == "success" else "red"
@@ -155,6 +158,7 @@ def schedule():
     _ensure_db()
 
     import card_retrieval.adapters  # noqa: F401
+    from card_retrieval.config import settings
     from card_retrieval.scheduling.scheduler import create_scheduler
 
     console.print("[bold]Starting scheduler...[/bold]")
@@ -162,13 +166,18 @@ def schedule():
     console.print(f"  CardX: every {typer.style(str(settings.schedule_cardx), fg='cyan')}h")
     console.print(f"  Kasikorn: every {typer.style(str(settings.schedule_kasikorn), fg='cyan')}h")
 
-    from card_retrieval.config import settings
-
     sched = create_scheduler()
     sched.start()
 
+    async def _run_forever():
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        except (KeyboardInterrupt, SystemExit):
+            pass
+
     try:
-        asyncio.get_event_loop().run_forever()
+        asyncio.run(_run_forever())
     except (KeyboardInterrupt, SystemExit):
         console.print("\n[bold]Scheduler stopped.[/bold]")
         sched.shutdown()

@@ -4,7 +4,6 @@ import structlog
 
 from card_retrieval.adapters.kasikorn.constants import (
     BANK_NAME,
-    HOME_URL,
     PROMOTION_URL,
     RATE_LIMIT_SECONDS,
     SELECTORS,
@@ -35,8 +34,7 @@ class KasikornAdapter(BaseAdapter):
 
         html = await self._fetcher.fetch_rendered_html(
             url=PROMOTION_URL,
-            pre_visit_url=HOME_URL,
-            wait_selector=SELECTORS["promotion_card"],
+            wait_selector=SELECTORS["title"],
             scroll=True,
         )
 

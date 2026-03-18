@@ -6,11 +6,26 @@ from datetime import date, datetime
 import structlog
 from bs4 import BeautifulSoup, Tag
 
-from card_retrieval.adapters.kasikorn.constants import BASE_URL, BANK_NAME, SELECTORS
+from card_retrieval.adapters.kasikorn.constants import BANK_NAME, BASE_URL, SELECTORS
 from card_retrieval.core.models import Promotion
 from card_retrieval.utils.text import extract_discount, extract_minimum_spend, normalize_thai_text
 
 logger = structlog.get_logger()
+
+THAI_MONTHS = {
+    "ม.ค.": 1, "มกราคม": 1,
+    "ก.พ.": 2, "กุมภาพันธ์": 2,
+    "มี.ค.": 3, "มีนาคม": 3,
+    "เม.ย.": 4, "เมษายน": 4,
+    "พ.ค.": 5, "พฤษภาคม": 5,
+    "มิ.ย.": 6, "มิถุนายน": 6,
+    "ก.ค.": 7, "กรกฎาคม": 7,
+    "ส.ค.": 8, "สิงหาคม": 8,
+    "ก.ย.": 9, "กันยายน": 9,
+    "ต.ค.": 10, "ตุลาคม": 10,
+    "พ.ย.": 11, "พฤศจิกายน": 11,
+    "ธ.ค.": 12, "ธันวาคม": 12,
+}
 
 
 def parse_promotions_from_html(html: str) -> list[Promotion]:
@@ -52,7 +67,7 @@ def _parse_card(card: Tag) -> Promotion | None:
             href = BASE_URL + href
 
         source_id = href.rstrip("/").split("/")[-1] if href else title[:80]
-        source_url = href or f"{BASE_URL}/th/personal/card/credit-card/pages/promotions.aspx"
+        source_url = href or f"{BASE_URL}/th/promotion/creditcard/Pages/index.aspx"
 
         # Image
         img_el = card.select_one(SELECTORS["image"])
@@ -105,20 +120,6 @@ def _parse_card(card: Tag) -> Promotion | None:
 
 def _parse_date_range(text: str) -> tuple[date | None, date | None]:
     """Parse Thai date range strings like '1 ม.ค. 67 - 31 มี.ค. 67'."""
-    THAI_MONTHS = {
-        "ม.ค.": 1, "มกราคม": 1,
-        "ก.พ.": 2, "กุมภาพันธ์": 2,
-        "มี.ค.": 3, "มีนาคม": 3,
-        "เม.ย.": 4, "เมษายน": 4,
-        "พ.ค.": 5, "พฤษภาคม": 5,
-        "มิ.ย.": 6, "มิถุนายน": 6,
-        "ก.ค.": 7, "กรกฎาคม": 7,
-        "ส.ค.": 8, "สิงหาคม": 8,
-        "ก.ย.": 9, "กันยายน": 9,
-        "ต.ค.": 10, "ตุลาคม": 10,
-        "พ.ย.": 11, "พฤศจิกายน": 11,
-        "ธ.ค.": 12, "ธันวาคม": 12,
-    }
 
     def _parse_thai_date(part: str) -> date | None:
         part = part.strip()

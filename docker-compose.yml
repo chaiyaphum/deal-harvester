@@ -1,0 +1,10 @@
+services:
+  scraper:
+    build: .
+    volumes:
+      - ./data:/app/data
+    environment:
+      - CARD_RETRIEVAL_BROWSER_HEADLESS=true
+    entrypoint: ["/app/entrypoint.sh"]
+    command: []
+    restart: unless-stopped
