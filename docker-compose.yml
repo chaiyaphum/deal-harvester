@@ -1,10 +1,9 @@
 services:
   scraper:
     build: .
-    volumes:
-      - ./data:/app/data
     environment:
-      - CARD_RETRIEVAL_BROWSER_HEADLESS=true
+      - CARD_RETRIEVAL_DATABASE_URL=${CARD_RETRIEVAL_DATABASE_URL}
+      - CARD_RETRIEVAL_BROWSER_HEADLESS=false
     entrypoint: ["/app/entrypoint.sh"]
     command: []
     restart: unless-stopped

@@ -22,11 +22,12 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     connectable = create_engine(settings.database_url, poolclass=pool.NullPool)
+    is_sqlite = settings.database_url.startswith("sqlite")
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True,
+            render_as_batch=is_sqlite,
         )
         with context.begin_transaction():
             context.run_migrations()

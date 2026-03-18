@@ -2,8 +2,9 @@ FROM mcr.microsoft.com/playwright/python:v1.50.0-noble
 
 WORKDIR /app
 
-# Install uv
+# Install uv and Xvfb
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
 COPY pyproject.toml ./

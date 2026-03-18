@@ -8,4 +8,4 @@ echo "Running Alembic migrations..."
 alembic upgrade head
 
 echo "Starting scheduler..."
-exec card-retrieval schedule
+exec xvfb-run card-retrieval schedule
