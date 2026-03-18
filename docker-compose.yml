@@ -7,3 +7,13 @@ services:
     entrypoint: ["/app/entrypoint.sh"]
     command: []
     restart: unless-stopped
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - CARD_RETRIEVAL_DATABASE_URL=${CARD_RETRIEVAL_DATABASE_URL}
+      - CARD_RETRIEVAL_API_KEYS=${CARD_RETRIEVAL_API_KEYS}
+    command: ["serve"]
+    restart: unless-stopped

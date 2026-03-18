@@ -26,5 +26,8 @@ class Settings(BaseSettings):
     browser_headless: bool = True
     browser_timeout: int = 30000
 
+    # API settings
+    api_keys: str = ""
+
 
 settings = Settings()

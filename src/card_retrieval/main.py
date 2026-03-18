@@ -184,6 +184,19 @@ def schedule():
 
 
 @app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", "--host", help="Bind host"),
+    port: int = typer.Option(8000, "--port", "-p", help="Bind port"),
+):
+    """Start the REST API server."""
+    import uvicorn
+
+    console.print(f"[bold]Starting API server on {host}:{port}...[/bold]")
+    console.print(f"  Swagger UI: http://{host}:{port}/docs")
+    uvicorn.run("card_retrieval.api.app:api", host=host, port=port)
+
+
+@app.command()
 def init_db():
     """Initialize the database tables."""
     _ensure_db()
