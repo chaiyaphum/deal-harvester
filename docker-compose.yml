@@ -16,7 +16,8 @@ services:
       - CARD_RETRIEVAL_DATABASE_URL=${CARD_RETRIEVAL_DATABASE_URL}
       - CARD_RETRIEVAL_API_KEYS=${CARD_RETRIEVAL_API_KEYS}
       - CARD_RETRIEVAL_BROWSER_HEADLESS=false
-    entrypoint: ["/bin/bash", "-c", "xvfb-run card-retrieval serve"]
+      - DISPLAY=:99
+    entrypoint: ["/bin/bash", "-c", "Xvfb :99 -screen 0 1920x1080x24 &>/dev/null & exec card-retrieval serve"]
     command: []
     restart: unless-stopped
 
