@@ -22,10 +22,8 @@ jobs:
             cd /opt/card-data-retrieval
             echo "==> Pulling latest code..."
             git pull origin main
-            echo "==> Building containers..."
-            docker compose build
-            echo "==> Restarting services..."
-            docker compose up -d
+            echo "==> Rebuilding and restarting services..."
+            docker compose up -d --build --force-recreate --remove-orphans
             echo "==> Cleaning up old images..."
             docker image prune -f
             echo "==> Deploy complete!"
