@@ -72,12 +72,13 @@ async def run_adapter(
 
 
 def _check_repeated_failures(
-    repo: PromotionRepository, bank: str, log: structlog.stdlib.BoundLogger,
+    repo: PromotionRepository,
+    bank: str,
+    log: structlog.stdlib.BoundLogger,
 ) -> None:
     recent_runs = repo.get_scrape_runs(bank=bank, limit=REPEATED_FAILURE_THRESHOLD)
-    if (
-        len(recent_runs) >= REPEATED_FAILURE_THRESHOLD
-        and all(r.status == "failed" for r in recent_runs)
+    if len(recent_runs) >= REPEATED_FAILURE_THRESHOLD and all(
+        r.status == "failed" for r in recent_runs
     ):
         log.critical(
             "adapter_repeated_failure",

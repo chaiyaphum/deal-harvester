@@ -150,7 +150,9 @@ def list_scrape_runs(
         from card_retrieval.api.schemas import ScrapeRunResponse
 
         items, total = repo.query_scrape_runs(
-            filters=filters, page=page, page_size=page_size,
+            filters=filters,
+            page=page,
+            page_size=page_size,
         )
         pages = math.ceil(total / page_size) if total > 0 else 0
         return ScrapeRunListResponse(

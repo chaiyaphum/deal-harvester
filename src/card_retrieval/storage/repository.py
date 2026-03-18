@@ -114,7 +114,9 @@ class PromotionRepository:
         return result.rowcount
 
     def get_promotions(
-        self, bank: str | None = None, active_only: bool = True,
+        self,
+        bank: str | None = None,
+        active_only: bool = True,
     ) -> list[PromotionRow]:
         stmt = select(PromotionRow)
         if bank:
@@ -155,9 +157,7 @@ class PromotionRepository:
             )
         if filters.get("search"):
             term = f"%{filters['search']}%"
-            stmt = stmt.where(
-                PromotionRow.title.ilike(term) | PromotionRow.description.ilike(term)
-            )
+            stmt = stmt.where(PromotionRow.title.ilike(term) | PromotionRow.description.ilike(term))
         if "is_active" in filters and filters["is_active"] is not None:
             stmt = stmt.where(PromotionRow.is_active.is_(filters["is_active"]))
         if filters.get("start_date_from"):
