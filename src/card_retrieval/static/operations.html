@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operations - Card Data Retrieval</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!--API_KEY_PLACEHOLDER-->
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .filter-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; }
+    .spinner { border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.6s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse-blue { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .pulse-blue { animation: pulse-blue 2s ease-in-out infinite; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- Nav -->
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+        <span class="text-lg font-semibold text-gray-900">Card Data Retrieval</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/" class="text-sm text-gray-500 hover:text-blue-600 transition">Dashboard</a>
+        <span class="text-gray-300">|</span>
+        <a href="/operations" class="text-sm text-blue-600 font-medium">Operations</a>
+        <span class="text-gray-300">|</span>
+        <a href="/docs" class="text-sm text-gray-500 hover:text-blue-600 transition">API Docs</a>
+        <button id="btn-settings" class="p-1.5 rounded-md hover:bg-gray-100 transition" title="API Key Settings">
+          <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Trigger Scrape -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div class="px-5 py-4 border-b border-gray-200">
+        <h2 class="text-base font-semibold text-gray-900">Trigger Scrape</h2>
+      </div>
+      <div class="px-5 py-4">
+        <div id="trigger-buttons" class="flex flex-wrap gap-3">
+          <div class="spinner"></div>
+        </div>
+        <div id="trigger-toast" class="mt-3 hidden rounded-md px-4 py-3 text-sm"></div>
+      </div>
+    </div>
+
+    <!-- Schedule Info -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div class="px-5 py-4 border-b border-gray-200">
+        <h2 class="text-base font-semibold text-gray-900">Schedule Configuration</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">Bank</th>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">Interval (hours)</th>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">Rate Limit (seconds)</th>
+            </tr>
+          </thead>
+          <tbody id="schedule-tbody" class="divide-y divide-gray-100">
+            <tr><td colspan="3" class="px-4 py-8 text-center text-gray-400">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 py-3 border-t border-gray-100">
+        <p class="text-xs text-gray-400">Configured via environment variables. Restart scraper to apply changes.</p>
+      </div>
+    </div>
+
+    <!-- Scrape Run History -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <h2 class="text-base font-semibold text-gray-900">Scrape Runs</h2>
+          <span id="runs-total-badge" class="hidden px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">0</span>
+        </div>
+        <div id="runs-spinner" class="spinner hidden"></div>
+      </div>
+      <div class="px-5 py-3 border-b border-gray-100">
+        <div class="flex flex-wrap gap-3">
+          <select id="rf-bank" class="filter-select rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+            <option value="">All Banks</option>
+          </select>
+          <select id="rf-status" class="filter-select rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+            <option value="">All Statuses</option>
+            <option value="running">Running</option>
+            <option value="success">Success</option>
+            <option value="failed">Failed</option>
+          </select>
+          <button id="rf-apply" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition">Apply</button>
+          <button id="rf-reset" class="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 transition">Reset</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">Bank</th>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">Status</th>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">Started</th>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">Duration</th>
+              <th class="px-4 py-3 text-right font-medium text-gray-500">Found</th>
+              <th class="px-4 py-3 text-right font-medium text-gray-500">New</th>
+              <th class="px-4 py-3 text-right font-medium text-gray-500">Updated</th>
+              <th class="px-4 py-3 text-left font-medium text-gray-500">Error</th>
+            </tr>
+          </thead>
+          <tbody id="runs-tbody" class="divide-y divide-gray-100">
+            <tr><td colspan="8" class="px-4 py-12 text-center text-gray-400">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div id="runs-pagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3">
+      <span id="runs-pag-info" class="text-sm text-gray-500"></span>
+      <div class="flex items-center gap-2">
+        <select id="runs-pag-size" class="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+          <option value="10">10 / page</option>
+          <option value="20" selected>20 / page</option>
+          <option value="50">50 / page</option>
+        </select>
+        <div id="runs-pag-buttons" class="flex items-center gap-1"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- API Key Modal -->
+  <div id="modal-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+      <h3 class="text-lg font-semibold text-gray-900 mb-1">API Key Required</h3>
+      <p class="text-sm text-gray-500 mb-4">Enter your API key to access the dashboard.</p>
+      <input id="modal-key-input" type="text" placeholder="your-api-key" class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none mb-4">
+      <div class="flex justify-end gap-2">
+        <button id="modal-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition">Cancel</button>
+        <button id="modal-save" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    'use strict';
+
+    // --- State ---
+    var runsPage = 1;
+    var runsPageSize = 20;
+    var runsTotalItems = 0;
+    var runsTotalPages = 0;
+    var knownBanks = [];
+    var runningBanks = [];
+    var pollTimer = null;
+
+    // --- API Key ---
+    function getApiKey() {
+      return (window.__API_KEY__ && window.__API_KEY__ !== '') ? window.__API_KEY__ : (localStorage.getItem('card_api_key') || '');
+    }
+
+    function showModal(force) {
+      var overlay = document.getElementById('modal-overlay');
+      overlay.classList.remove('hidden');
+      var input = document.getElementById('modal-key-input');
+      input.value = force ? '' : getApiKey();
+      input.focus();
+      if (!force) {
+        document.getElementById('modal-cancel').classList.add('hidden');
+      } else {
+        document.getElementById('modal-cancel').classList.remove('hidden');
+      }
+    }
+
+    function hideModal() {
+      document.getElementById('modal-overlay').classList.add('hidden');
+    }
+
+    document.getElementById('modal-save').addEventListener('click', function() {
+      var key = document.getElementById('modal-key-input').value.trim();
+      if (key) {
+        localStorage.setItem('card_api_key', key);
+        window.__API_KEY__ = key;
+        hideModal();
+        init();
+      }
+    });
+
+    document.getElementById('modal-cancel').addEventListener('click', hideModal);
+
+    document.getElementById('modal-key-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') document.getElementById('modal-save').click();
+    });
+
+    document.getElementById('btn-settings').addEventListener('click', function() {
+      showModal(true);
+    });
+
+    // --- Fetch Wrapper ---
+    async function apiFetch(path, options) {
+      var key = getApiKey();
+      if (!key) { showModal(false); throw new Error('No API key'); }
+      var opts = options || {};
+      var headers = Object.assign({ 'X-API-Key': key }, opts.headers || {});
+      if (opts.body) headers['Content-Type'] = 'application/json';
+      var res = await fetch('/api/v1' + path, {
+        method: opts.method || 'GET',
+        headers: headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      if (res.status === 401 || res.status === 403) {
+        showModal(false);
+        throw new Error('Unauthorized');
+      }
+      if (!res.ok) {
+        var errBody = null;
+        try { errBody = await res.json(); } catch (_) {}
+        var msg = (errBody && errBody.detail) ? errBody.detail : 'API error: ' + res.status;
+        throw new Error(msg);
+      }
+      return res.json();
+    }
+
+    // --- Escape Helper ---
+    function esc(str) {
+      var el = document.createElement('span');
+      el.textContent = str;
+      return el.innerHTML;
+    }
+
+    // --- Duration Helper ---
+    function formatDuration(startedAt, finishedAt) {
+      if (!finishedAt) return '-';
+      var start = new Date(startedAt);
+      var end = new Date(finishedAt);
+      var diff = Math.round((end - start) / 1000);
+      if (diff < 0) return '-';
+      var m = Math.floor(diff / 60);
+      var s = diff % 60;
+      if (m > 0) return m + 'm ' + s + 's';
+      return s + 's';
+    }
+
+    // --- Format Date ---
+    function formatDate(iso) {
+      if (!iso) return '-';
+      var d = new Date(iso);
+      return d.toLocaleString();
+    }
+
+    // --- Toast ---
+    function showToast(message, type) {
+      var toast = document.getElementById('trigger-toast');
+      toast.classList.remove('hidden', 'bg-green-50', 'text-green-800', 'bg-red-50', 'text-red-800', 'bg-blue-50', 'text-blue-800');
+      if (type === 'success') {
+        toast.classList.add('bg-green-50', 'text-green-800');
+      } else if (type === 'error') {
+        toast.classList.add('bg-red-50', 'text-red-800');
+      } else {
+        toast.classList.add('bg-blue-50', 'text-blue-800');
+      }
+      toast.textContent = message;
+      toast.classList.remove('hidden');
+      setTimeout(function() { toast.classList.add('hidden'); }, 5000);
+    }
+
+    // --- Trigger Buttons ---
+    async function loadTriggerButtons() {
+      var container = document.getElementById('trigger-buttons');
+      try {
+        var data = await apiFetch('/health');
+        knownBanks = data.adapters || [];
+        renderTriggerButtons();
+      } catch (e) {
+        if (e.message !== 'No API key' && e.message !== 'Unauthorized') {
+          container.innerHTML = '<span class="text-red-500 text-sm">Failed to load adapters</span>';
+        }
+      }
+    }
+
+    function renderTriggerButtons() {
+      var container = document.getElementById('trigger-buttons');
+      container.innerHTML = '';
+
+      // Per-bank buttons
+      knownBanks.forEach(function(bank) {
+        var btn = document.createElement('button');
+        btn.className = 'trigger-btn px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition inline-flex items-center gap-2';
+        btn.dataset.bank = bank;
+        btn.innerHTML = esc(bank.toUpperCase());
+        if (runningBanks.indexOf(bank) !== -1) {
+          btn.disabled = true;
+          btn.classList.add('opacity-60', 'cursor-not-allowed');
+          btn.classList.remove('hover:bg-blue-700');
+          btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> ' + esc(bank.toUpperCase());
+        }
+        btn.addEventListener('click', function() { triggerScrape(bank); });
+        container.appendChild(btn);
+      });
+
+      // All banks button
+      var allBtn = document.createElement('button');
+      allBtn.className = 'trigger-btn px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition inline-flex items-center gap-2';
+      allBtn.dataset.bank = '__all__';
+      var anyRunning = runningBanks.length > 0;
+      if (anyRunning) {
+        allBtn.disabled = true;
+        allBtn.classList.add('opacity-60', 'cursor-not-allowed');
+        allBtn.classList.remove('hover:bg-indigo-700');
+        allBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> All Banks';
+      } else {
+        allBtn.innerHTML = 'All Banks';
+      }
+      allBtn.addEventListener('click', function() { triggerScrape(null); });
+      container.appendChild(allBtn);
+    }
+
+    async function triggerScrape(bank) {
+      try {
+        var body = {};
+        if (bank !== null) body.bank = bank;
+        var data = await apiFetch('/scrape/trigger', { method: 'POST', body: body });
+        showToast(data.message + ': ' + data.banks.join(', '), 'success');
+        startPolling();
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    // --- Polling for running scrapes ---
+    async function pollRunning() {
+      try {
+        var data = await apiFetch('/scrape/running');
+        var prev = runningBanks.slice();
+        runningBanks = data.banks || [];
+        renderTriggerButtons();
+
+        // If scrapes just finished, refresh history
+        if (prev.length > 0 && runningBanks.length < prev.length) {
+          loadRuns();
+        }
+
+        // Stop polling if nothing running
+        if (runningBanks.length === 0) {
+          stopPolling();
+        }
+      } catch (_) { /* ignore poll errors */ }
+    }
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollRunning();
+      pollTimer = setInterval(pollRunning, 5000);
+    }
+
+    function stopPolling() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    // --- Schedule ---
+    async function loadSchedule() {
+      var tbody = document.getElementById('schedule-tbody');
+      try {
+        var data = await apiFetch('/schedule');
+        tbody.innerHTML = '';
+        if (!data.schedules || data.schedules.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-400">No schedules configured</td></tr>';
+          return;
+        }
+        data.schedules.forEach(function(s) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700">' + esc(s.bank) + '</span></td>' +
+            '<td class="px-4 py-3 text-gray-700">' + esc(String(s.interval_hours)) + '</td>' +
+            '<td class="px-4 py-3 text-gray-700">' + esc(String(s.rate_limit_seconds)) + '</td>';
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        if (e.message !== 'No API key' && e.message !== 'Unauthorized') {
+          tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-red-400">Failed to load schedule</td></tr>';
+        }
+      }
+    }
+
+    // --- Scrape Runs ---
+    async function loadRuns() {
+      var spinner = document.getElementById('runs-spinner');
+      spinner.classList.remove('hidden');
+      try {
+        var params = new URLSearchParams();
+        var bank = document.getElementById('rf-bank').value;
+        var runStatus = document.getElementById('rf-status').value;
+        if (bank) params.set('bank', bank);
+        if (runStatus) params.set('status', runStatus);
+        params.set('page', runsPage);
+        params.set('page_size', runsPageSize);
+
+        var data = await apiFetch('/scrape-runs?' + params.toString());
+        runsTotalItems = data.total;
+        runsTotalPages = data.pages;
+
+        renderRuns(data.items);
+        renderRunsPagination();
+
+        var badge = document.getElementById('runs-total-badge');
+        badge.textContent = runsTotalItems.toLocaleString();
+        badge.classList.remove('hidden');
+      } catch (e) {
+        if (e.message !== 'No API key' && e.message !== 'Unauthorized') {
+          document.getElementById('runs-tbody').innerHTML = '<tr><td colspan="8" class="px-4 py-12 text-center text-red-400">Failed to load scrape runs</td></tr>';
+        }
+      } finally {
+        spinner.classList.add('hidden');
+      }
+    }
+
+    function renderRuns(items) {
+      var tbody = document.getElementById('runs-tbody');
+      tbody.innerHTML = '';
+
+      if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-12 text-center text-gray-400">No scrape runs found</td></tr>';
+        return;
+      }
+
+      items.forEach(function(r) {
+        var tr = document.createElement('tr');
+
+        // Bank badge
+        var tdBank = '<td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700">' + esc(r.bank) + '</span></td>';
+
+        // Status badge
+        var statusColor = 'bg-gray-100 text-gray-700';
+        var extraClass = '';
+        if (r.status === 'success') statusColor = 'bg-green-100 text-green-800';
+        else if (r.status === 'failed') statusColor = 'bg-red-100 text-red-800';
+        else if (r.status === 'running') { statusColor = 'bg-blue-100 text-blue-800'; extraClass = ' pulse-blue'; }
+        var tdStatus = '<td class="px-4 py-3"><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full ' + statusColor + extraClass + '">' + esc(r.status) + '</span></td>';
+
+        // Started
+        var tdStarted = '<td class="px-4 py-3 text-gray-600">' + esc(formatDate(r.started_at)) + '</td>';
+
+        // Duration
+        var tdDuration = '<td class="px-4 py-3 text-gray-600">' + esc(formatDuration(r.started_at, r.finished_at)) + '</td>';
+
+        // Found / New / Updated
+        var tdFound = '<td class="px-4 py-3 text-right text-gray-700">' + esc(String(r.promotions_found)) + '</td>';
+        var tdNew = '<td class="px-4 py-3 text-right text-gray-700">' + esc(String(r.promotions_new)) + '</td>';
+        var tdUpdated = '<td class="px-4 py-3 text-right text-gray-700">' + esc(String(r.promotions_updated)) + '</td>';
+
+        // Error
+        var errorText = r.error_message || '';
+        var truncated = errorText.length > 80 ? errorText.substring(0, 80) + '...' : errorText;
+        var tdError = '<td class="px-4 py-3 text-red-600 text-xs max-w-[200px] truncate" title="' + esc(errorText) + '">' + esc(truncated) + '</td>';
+
+        tr.innerHTML = tdBank + tdStatus + tdStarted + tdDuration + tdFound + tdNew + tdUpdated + tdError;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // --- Populate bank filter for runs ---
+    function populateRunsFilters() {
+      var sel = document.getElementById('rf-bank');
+      sel.innerHTML = '<option value="">All Banks</option>';
+      knownBanks.forEach(function(b) {
+        var opt = document.createElement('option');
+        opt.value = b;
+        opt.textContent = b;
+        sel.appendChild(opt);
+      });
+    }
+
+    // --- Runs Pagination ---
+    function renderRunsPagination() {
+      var container = document.getElementById('runs-pagination');
+      if (runsTotalItems === 0) { container.classList.add('hidden'); return; }
+      container.classList.remove('hidden');
+
+      var start = (runsPage - 1) * runsPageSize + 1;
+      var end = Math.min(runsPage * runsPageSize, runsTotalItems);
+      document.getElementById('runs-pag-info').textContent = 'Showing ' + start + '-' + end + ' of ' + runsTotalItems.toLocaleString();
+
+      var btns = document.getElementById('runs-pag-buttons');
+      btns.innerHTML = '';
+
+      addPageBtn(btns, '<', runsPage > 1, runsPage - 1);
+
+      var pages = [];
+      if (runsTotalPages <= 7) {
+        for (var i = 1; i <= runsTotalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        if (runsPage > 3) pages.push('...');
+        for (var j = Math.max(2, runsPage - 1); j <= Math.min(runsTotalPages - 1, runsPage + 1); j++) pages.push(j);
+        if (runsPage < runsTotalPages - 2) pages.push('...');
+        pages.push(runsTotalPages);
+      }
+
+      pages.forEach(function(p) {
+        if (p === '...') {
+          var span = document.createElement('span');
+          span.className = 'px-2 py-1 text-sm text-gray-400';
+          span.textContent = '...';
+          btns.appendChild(span);
+        } else {
+          addPageBtn(btns, String(p), true, p, p === runsPage);
+        }
+      });
+
+      addPageBtn(btns, '>', runsPage < runsTotalPages, runsPage + 1);
+    }
+
+    function addPageBtn(container, label, enabled, page, active) {
+      var btn = document.createElement('button');
+      btn.textContent = label;
+      btn.className = 'px-3 py-1.5 text-sm rounded-md border transition ';
+      if (active) {
+        btn.className += 'bg-blue-600 text-white border-blue-600';
+      } else if (enabled) {
+        btn.className += 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50';
+      } else {
+        btn.className += 'bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed';
+      }
+      if (enabled && !active) {
+        btn.addEventListener('click', function() { runsPage = page; loadRuns(); });
+      }
+      container.appendChild(btn);
+    }
+
+    // --- Event Handlers ---
+    document.getElementById('rf-apply').addEventListener('click', function() {
+      runsPage = 1;
+      loadRuns();
+    });
+
+    document.getElementById('rf-reset').addEventListener('click', function() {
+      document.getElementById('rf-bank').value = '';
+      document.getElementById('rf-status').value = '';
+      runsPage = 1;
+      loadRuns();
+    });
+
+    document.getElementById('runs-pag-size').addEventListener('change', function() {
+      runsPageSize = parseInt(this.value);
+      runsPage = 1;
+      loadRuns();
+    });
+
+    // --- Init ---
+    async function init() {
+      if (!getApiKey()) { showModal(false); return; }
+      await loadTriggerButtons();
+      populateRunsFilters();
+      // Initial poll to check running state
+      await pollRunning();
+      if (runningBanks.length > 0) startPolling();
+      await Promise.all([loadSchedule(), loadRuns()]);
+    }
+
+    init();
+  })();
+  </script>
+</body>
+</html>

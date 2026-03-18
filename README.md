@@ -13,6 +13,7 @@ Automated credit card promotion scraper for Thai bank websites. Supports 3 banks
 - [Usage (CLI)](#usage-cli)
 - [Configuration](#configuration)
 - [Dashboard UI](#dashboard-ui)
+- [Operations UI](#operations-ui)
 - [REST API](#rest-api)
 - [CI/CD](#cicd)
 - [Component Reference](#component-reference)
@@ -41,8 +42,9 @@ The system:
 5. **Runs on a schedule** via built-in scheduler
 6. **Serves a REST API** for querying promotions, stats, and scrape history
 7. **Dashboard UI** at `/` — browse promotions with filters, search, pagination, and stats
-8. **Logs audit trail** for every scrape run
-9. **Alerts on repeated failures** (3+ consecutive fails per adapter)
+8. **Operations UI** at `/operations` — trigger scrapes, view run history, and schedule config
+9. **Logs audit trail** for every scrape run
+10. **Alerts on repeated failures** (3+ consecutive fails per adapter)
 
 | Bank | Website | Difficulty | Scraping Method |
 |------|---------|-----------|-----------------|
@@ -153,7 +155,8 @@ card-data-retrieval/
 │   │   └── schemas.py                      # Pydantic response models
 │   │
 │   ├── static/                             # Frontend assets
-│   │   └── index.html                      # Dashboard UI (Tailwind CSS + vanilla JS)
+│   │   ├── index.html                      # Dashboard UI (Tailwind CSS + vanilla JS)
+│   │   └── operations.html                 # Operations UI (trigger scrapes, run history)
 │   │
 │   ├── core/                               # Core business logic
 │   │   ├── base_adapter.py                 # Abstract base class for adapters
@@ -324,7 +327,7 @@ card-retrieval serve
 card-retrieval serve --host 127.0.0.1 --port 3000
 ```
 
-Dashboard at `http://<host>:<port>/`, Swagger UI at `/docs`, ReDoc at `/redoc`.
+Dashboard at `http://<host>:<port>/`, Operations at `/operations`, Swagger UI at `/docs`, ReDoc at `/redoc`.
 
 #### `init-db` — Create database tables
 
@@ -409,9 +412,38 @@ A single-page dashboard served at `/` for browsing promotions visually.
 
 ---
 
+## Operations UI
+
+An operations page served at `/operations` for managing scrapes and monitoring system health.
+
+- **Live:** [https://deals.biggo-analytics.dev/operations](https://deals.biggo-analytics.dev/operations)
+- **Tech:** Same as Dashboard — Tailwind CSS (CDN) + vanilla JavaScript, no build step
+- **Source:** `src/card_retrieval/static/operations.html`
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Trigger Scrape** | Per-bank buttons + "All Banks" button to trigger scrapes from the UI |
+| **Running status** | Buttons show spinner while scrape is running, polls every 5s for updates |
+| **Schedule table** | Read-only view of configured scrape intervals and rate limits per bank |
+| **Scrape run history** | Filterable table (by bank/status) with pagination, duration, counts, error messages |
+| **Status badges** | Green = success, Red = failed, Blue + pulse animation = running |
+| **Conflict detection** | 409 error if scrape already running for the requested bank |
+| **Stale run handling** | Runs older than 30 minutes are considered stale and ignored |
+| **Navigation** | Shared nav bar with Dashboard, Operations (active), and API Docs links |
+
+### Notes
+
+- Scrapes triggered from the UI run in the **API container** via FastAPI BackgroundTasks
+- The API container is configured with `xvfb-run` and `CARD_RETRIEVAL_BROWSER_HEADLESS=false` to support Playwright-based scrapes (CardX, Kasikorn)
+- Schedule configuration is **read-only** — change via environment variables and restart the scraper container
+
+---
+
 ## REST API
 
-The REST API provides read-only access to scraped promotion data. It runs as a separate service alongside the scraper/scheduler.
+The REST API provides access to scraped promotion data and scrape operations. It runs as a separate service alongside the scraper/scheduler.
 
 ### Base URL
 
@@ -420,6 +452,7 @@ https://deals.biggo-analytics.dev/api/v1
 ```
 
 - **Dashboard:** `https://deals.biggo-analytics.dev/` (promotion browser with filters and stats)
+- **Operations:** `https://deals.biggo-analytics.dev/operations` (trigger scrapes, run history, schedule config)
 - **Swagger UI:** `https://deals.biggo-analytics.dev/docs` (pre-authorized with the first configured API key)
 - **ReDoc:** `https://deals.biggo-analytics.dev/redoc`
 
@@ -590,6 +623,73 @@ curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/filters
   "discount_types": ["cashback", "discount", "percentage", "points"],
   "card_types": ["KTC VISA PLATINUM", "..."],
   "merchant_names": ["Starbucks", "..."]
+}
+```
+
+#### `POST /api/v1/scrape/trigger` — Trigger a scrape
+
+Triggers a scrape as a background task. Returns immediately.
+
+**Request body:**
+
+```json
+{"bank": "ktc"}
+```
+
+Pass `{"bank": null}` or `{}` to scrape all banks.
+
+**Responses:**
+
+- `200` — Scrape triggered successfully
+- `404` — Unknown bank name
+- `409` — Scrape already running for the requested bank
+
+```bash
+# Trigger scrape for a specific bank
+curl -X POST -H "X-API-Key: your-key" -H "Content-Type: application/json" \
+  -d '{"bank": "ktc"}' http://localhost:8000/api/v1/scrape/trigger
+
+# Trigger scrape for all banks
+curl -X POST -H "X-API-Key: your-key" -H "Content-Type: application/json" \
+  -d '{}' http://localhost:8000/api/v1/scrape/trigger
+```
+
+```json
+{
+  "message": "Scrape triggered",
+  "banks": ["ktc"]
+}
+```
+
+#### `GET /api/v1/scrape/running` — Currently running scrapes
+
+Returns bank names with active (non-stale) running scrape runs. Runs older than 30 minutes are considered stale.
+
+```bash
+curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/scrape/running
+```
+
+```json
+{
+  "banks": ["ktc", "cardx"]
+}
+```
+
+#### `GET /api/v1/schedule` — Schedule configuration (read-only)
+
+Returns the configured scrape intervals and rate limits per bank.
+
+```bash
+curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/schedule
+```
+
+```json
+{
+  "schedules": [
+    {"bank": "ktc", "interval_hours": 6, "rate_limit_seconds": 2.0},
+    {"bank": "cardx", "interval_hours": 12, "rate_limit_seconds": 5.0},
+    {"bank": "kasikorn", "interval_hours": 24, "rate_limit_seconds": 10.0}
+  ]
 }
 ```
 
@@ -1183,12 +1283,12 @@ The production setup runs three services:
 ```yaml
 services:
   scraper:    # Scheduled scraping (entrypoint.sh → migrate + xvfb-run scheduler)
-  api:        # FastAPI app on port 8000 (dashboard + REST API)
+  api:        # FastAPI app on port 8000 (dashboard + operations UI + REST API)
   nginx:      # Reverse proxy: port 80 → api:8000 (for Cloudflare)
 ```
 
 - **scraper** — runs `entrypoint.sh` which executes Alembic migrations then starts the scheduler with `xvfb-run` (for headed Kasikorn scraping)
-- **api** — runs `card-retrieval serve` on port 8000, serves dashboard at `/` and API at `/api/v1/*`
+- **api** — runs `xvfb-run card-retrieval serve` on port 8000, serves dashboard at `/`, operations UI at `/operations`, and API at `/api/v1/*`. Configured with `CARD_RETRIEVAL_BROWSER_HEADLESS=false` to support Playwright-based scrapes triggered from the Operations UI
 - **nginx** — lightweight `nginx:alpine` container, proxies port 80 to the API service
 
 ### Domain & Cloudflare

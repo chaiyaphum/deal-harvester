@@ -33,6 +33,19 @@ def dashboard() -> HTMLResponse:
     return HTMLResponse(content=content)
 
 
+@api.get("/operations", include_in_schema=False)
+def operations_page() -> HTMLResponse:
+    api_key = ""
+    if settings.api_keys:
+        api_key = settings.api_keys.split(",")[0].strip()
+    content = (_static_dir / "operations.html").read_text()
+    content = content.replace(
+        "<!--API_KEY_PLACEHOLDER-->",
+        f'<script>window.__API_KEY__="{api_key}";</script>',
+    )
+    return HTMLResponse(content=content)
+
+
 @api.get("/docs", include_in_schema=False)
 def custom_swagger_ui(request: Request) -> HTMLResponse:
     # Get the first configured API key for Swagger pre-auth

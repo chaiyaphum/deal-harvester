@@ -78,3 +78,26 @@ class FilterOptionsResponse(BaseModel):
     discount_types: list[str]
     card_types: list[str]
     merchant_names: list[str]
+
+
+class ScrapeTriggerRequest(BaseModel):
+    bank: str | None = None
+
+
+class ScrapeTriggerResponse(BaseModel):
+    message: str
+    banks: list[str]
+
+
+class RunningScrapesResponse(BaseModel):
+    banks: list[str]
+
+
+class ScheduleEntry(BaseModel):
+    bank: str
+    interval_hours: int
+    rate_limit_seconds: float
+
+
+class ScheduleInfoResponse(BaseModel):
+    schedules: list[ScheduleEntry]

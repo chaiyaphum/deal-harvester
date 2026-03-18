@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import math
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import structlog
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import select
 
 from card_retrieval.api.auth import require_api_key
 from card_retrieval.api.schemas import (
@@ -11,9 +13,16 @@ from card_retrieval.api.schemas import (
     HealthResponse,
     PromotionListResponse,
     PromotionResponse,
+    RunningScrapesResponse,
+    ScheduleEntry,
+    ScheduleInfoResponse,
     ScrapeRunListResponse,
+    ScrapeTriggerRequest,
+    ScrapeTriggerResponse,
     StatsResponse,
 )
+from card_retrieval.config import settings
+from card_retrieval.storage.orm_models import ScrapeRunRow
 from card_retrieval.storage.repository import PromotionRepository
 
 router = APIRouter(prefix="/api/v1")
@@ -200,3 +209,112 @@ def get_filters():
         return FilterOptionsResponse(**options)
     finally:
         repo.close()
+
+
+# --- Scrape Trigger ---
+
+STALE_THRESHOLD_MINUTES = 30
+
+
+def _get_running_banks() -> list[str]:
+    """Return bank names with non-stale running scrape runs."""
+    repo = _get_repo()
+    try:
+        cutoff = datetime.utcnow() - timedelta(minutes=STALE_THRESHOLD_MINUTES)
+        stmt = (
+            select(ScrapeRunRow.bank)
+            .where(ScrapeRunRow.status == "running")
+            .where(ScrapeRunRow.started_at > cutoff)
+            .distinct()
+        )
+        return list(repo.session.execute(stmt).scalars().all())
+    finally:
+        repo.close()
+
+
+async def _run_scrape_background(banks: list[str]) -> None:
+    import card_retrieval.adapters  # noqa: F401
+    from card_retrieval.core.pipeline import run_pipeline
+
+    repo = PromotionRepository()
+    try:
+        await run_pipeline(banks=banks, repo=repo)
+    except Exception:
+        structlog.get_logger().exception("background_scrape_failed", banks=banks)
+    finally:
+        repo.close()
+
+
+@router.post(
+    "/scrape/trigger",
+    response_model=ScrapeTriggerResponse,
+    tags=["scrape"],
+    dependencies=[Depends(require_api_key)],
+)
+def trigger_scrape(
+    body: ScrapeTriggerRequest,
+    background_tasks: BackgroundTasks,
+):
+    import card_retrieval.adapters  # noqa: F401
+    from card_retrieval.core.registry import list_adapters
+
+    adapters = list_adapters()
+
+    if body.bank is not None:
+        if body.bank not in adapters:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Unknown bank '{body.bank}'. Available: {', '.join(adapters.keys())}",
+            )
+        banks = [body.bank]
+    else:
+        banks = list(adapters.keys())
+
+    running = _get_running_banks()
+    conflicts = [b for b in banks if b in running]
+    if conflicts:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Scrape already running for: {', '.join(conflicts)}",
+        )
+
+    background_tasks.add_task(_run_scrape_background, banks)
+    return ScrapeTriggerResponse(message="Scrape triggered", banks=banks)
+
+
+@router.get(
+    "/scrape/running",
+    response_model=RunningScrapesResponse,
+    tags=["scrape"],
+    dependencies=[Depends(require_api_key)],
+)
+def get_running_scrapes():
+    return RunningScrapesResponse(banks=_get_running_banks())
+
+
+# --- Schedule ---
+
+
+@router.get(
+    "/schedule",
+    response_model=ScheduleInfoResponse,
+    tags=["schedule"],
+    dependencies=[Depends(require_api_key)],
+)
+def get_schedule():
+    import card_retrieval.adapters  # noqa: F401
+    from card_retrieval.core.registry import list_adapters
+
+    adapters = list_adapters()
+    entries = []
+    for bank in adapters:
+        interval = getattr(settings, f"schedule_{bank}", 24)
+        rate_limit = getattr(settings, f"rate_limit_{bank}", 5.0)
+        entries.append(
+            ScheduleEntry(
+                bank=bank,
+                interval_hours=interval,
+                rate_limit_seconds=rate_limit,
+            )
+        )
+    return ScheduleInfoResponse(schedules=entries)
