@@ -24,6 +24,10 @@ async def run_adapter(
     log = logger.bind(bank=bank, run_id=run.id)
     log.info("scrape_started")
 
+    # Persist "running" status so the API can detect in-progress scrapes
+    if not dry_run:
+        repo.save_scrape_run(run)
+
     try:
         promotions = await adapter.fetch_promotions()
         run.promotions_found = len(promotions)
@@ -62,7 +66,7 @@ async def run_adapter(
         await adapter.close()
 
     if not dry_run:
-        repo.save_scrape_run(run)
+        repo.update_scrape_run(run)
 
         # Check for repeated failures
         if run.status == "failed":

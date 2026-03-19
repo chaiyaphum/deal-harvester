@@ -84,3 +84,31 @@ def test_save_scrape_run(repo):
     assert len(runs) == 1
     assert runs[0].bank == "ktc"
     assert runs[0].promotions_found == 10
+
+
+def test_update_scrape_run(repo):
+    from datetime import datetime
+
+    run = ScrapeRun(bank="ktc", status="running")
+    repo.save_scrape_run(run)
+
+    # Verify it's saved as running
+    runs = repo.get_scrape_runs(bank="ktc")
+    assert runs[0].status == "running"
+    assert runs[0].finished_at is None
+
+    # Update to success
+    run.status = "success"
+    run.finished_at = datetime.utcnow()
+    run.promotions_found = 50
+    run.promotions_new = 10
+    run.promotions_updated = 3
+    repo.update_scrape_run(run)
+
+    runs = repo.get_scrape_runs(bank="ktc")
+    assert len(runs) == 1
+    assert runs[0].status == "success"
+    assert runs[0].finished_at is not None
+    assert runs[0].promotions_found == 50
+    assert runs[0].promotions_new == 10
+    assert runs[0].promotions_updated == 3

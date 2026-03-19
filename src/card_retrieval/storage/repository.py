@@ -98,6 +98,22 @@ class PromotionRepository:
         self.session.add(row)
         self.session.commit()
 
+    def update_scrape_run(self, run: ScrapeRun):
+        stmt = (
+            update(ScrapeRunRow)
+            .where(ScrapeRunRow.id == run.id)
+            .values(
+                finished_at=run.finished_at,
+                status=run.status,
+                promotions_found=run.promotions_found,
+                promotions_new=run.promotions_new,
+                promotions_updated=run.promotions_updated,
+                error_message=run.error_message,
+            )
+        )
+        self.session.execute(stmt)
+        self.session.commit()
+
     def deactivate_missing(self, bank: str, active_source_ids: list[str]) -> int:
         """Set is_active=False for promotions not in the current scrape."""
         stmt = (
