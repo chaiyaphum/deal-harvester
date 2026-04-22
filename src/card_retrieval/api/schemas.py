@@ -22,6 +22,7 @@ class PromotionResponse(BaseModel):
     start_date: date | None
     end_date: date | None
     terms_and_conditions: str | None
+    checksum: str
     is_active: bool
     scraped_at: datetime
     created_at: datetime
