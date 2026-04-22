@@ -16,11 +16,19 @@ class Settings(BaseSettings):
     rate_limit_ktc: float = 2.0
     rate_limit_cardx: float = 5.0
     rate_limit_kasikorn: float = 10.0
+    rate_limit_krungsri: float = 3.0
+    rate_limit_uob: float = 4.0
+    rate_limit_amex: float = 6.0
+    rate_limit_bbl: float = 5.0
 
     # Scheduling intervals (hours)
     schedule_ktc: int = 6
     schedule_cardx: int = 12
     schedule_kasikorn: int = 24
+    schedule_krungsri: int = 12
+    schedule_uob: int = 24
+    schedule_amex: int = 12
+    schedule_bbl: int = 24
 
     # Browser settings
     browser_headless: bool = True
