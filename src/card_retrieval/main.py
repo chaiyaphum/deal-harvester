@@ -165,6 +165,10 @@ def schedule():
     console.print(f"  KTC: every {typer.style(str(settings.schedule_ktc), fg='cyan')}h")
     console.print(f"  CardX: every {typer.style(str(settings.schedule_cardx), fg='cyan')}h")
     console.print(f"  Kasikorn: every {typer.style(str(settings.schedule_kasikorn), fg='cyan')}h")
+    console.print(f"  Krungsri: every {typer.style(str(settings.schedule_krungsri), fg='cyan')}h")
+    console.print(f"  UOB: every {typer.style(str(settings.schedule_uob), fg='cyan')}h")
+    console.print(f"  Amex TH: every {typer.style(str(settings.schedule_amex), fg='cyan')}h")
+    console.print(f"  BBL: every {typer.style(str(settings.schedule_bbl), fg='cyan')}h")
 
     sched = create_scheduler()
     sched.start()

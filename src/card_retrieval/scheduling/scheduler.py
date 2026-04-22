@@ -52,5 +52,33 @@ def create_scheduler() -> AsyncIOScheduler:
         id="kasikorn_scrape",
         name="Kasikorn Promotion Scrape",
     )
+    scheduler.add_job(
+        lambda: _run_bank("krungsri"),
+        "interval",
+        hours=settings.schedule_krungsri,
+        id="krungsri_scrape",
+        name="Krungsri Promotion Scrape",
+    )
+    scheduler.add_job(
+        lambda: _run_bank("uob"),
+        "interval",
+        hours=settings.schedule_uob,
+        id="uob_scrape",
+        name="UOB Promotion Scrape",
+    )
+    scheduler.add_job(
+        lambda: _run_bank("amex"),
+        "interval",
+        hours=settings.schedule_amex,
+        id="amex_scrape",
+        name="Amex TH Promotion Scrape",
+    )
+    scheduler.add_job(
+        lambda: _run_bank("bbl"),
+        "interval",
+        hours=settings.schedule_bbl,
+        id="bbl_scrape",
+        name="BBL Promotion Scrape",
+    )
 
     return scheduler
