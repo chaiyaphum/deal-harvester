@@ -47,9 +47,7 @@ _MERCHANT_PATTERNS = [
     ),
 ]
 
-_MERCHANT_BLOCKLIST = re.compile(
-    r"บัตรเครดิต|บัตรเดบิต|กรุงศรี|Krungsri|BAY|KMA", re.IGNORECASE
-)
+_MERCHANT_BLOCKLIST = re.compile(r"บัตรเครดิต|บัตรเดบิต|กรุงศรี|Krungsri|BAY|KMA", re.IGNORECASE)
 
 
 THAI_MONTHS = {
@@ -156,9 +154,7 @@ def parse_promotions_from_html(html: str) -> list[Promotion]:
     cards = soup.select(SELECTORS["promotion_card"])
     if not cards:
         # Broad fallback: any element whose class hints at a promotion card.
-        cards = soup.find_all(
-            ["a", "article", "div"], class_=re.compile(r"promo|card", re.I)
-        )
+        cards = soup.find_all(["a", "article", "div"], class_=re.compile(r"promo|card", re.I))
 
     logger.info("krungsri_cards_found", count=len(cards))
 
@@ -198,11 +194,7 @@ def _parse_card(card: Tag) -> Promotion | None:
         img_el = card.select_one(SELECTORS["image"])
         image_url: str | None = None
         if img_el:
-            raw_img = (
-                img_el.get("src")
-                or img_el.get("data-src")
-                or img_el.get("data-lazy-src")
-            )
+            raw_img = img_el.get("src") or img_el.get("data-src") or img_el.get("data-lazy-src")
             if isinstance(raw_img, list):
                 image_url = raw_img[0] if raw_img else None
             else:
