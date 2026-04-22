@@ -1,74 +1,83 @@
 # Amex Thailand adapter — implementation plan
 
-Status: **scaffold only** (2026-04-22). Adapter is registered so `list-adapters`
-surfaces it, but `fetch_promotions` raises `NotImplementedError`.
+Status: **implemented (dining category)** (2026-04-22). `fetch_promotions`
+returns a deduplicated list of `Promotion` objects parsed from the live hub.
+Live-captured HTML fixture ships in `tests/fixtures/amex_offers.html` (8 of
+45 dining offers, trimmed).
 
-## Site structure
+## What actually shipped
 
-- Root: https://www.americanexpress.com/th/
-- Likely promotion hubs (verify — Amex rotates content between these):
-  - `https://www.americanexpress.com/th/benefits/offers/` (card-member offers hub)
-  - `https://www.americanexpress.com/th/credit-cards/benefits/` (card-feature pages)
-- Architecture: heavily JS-driven. The page HTML is shipped with a thin React
-  shell; promo tiles are injected client-side from a JSON API hit at
-  `api/content/...` or `axp-offers/...`. Confirm via DevTools network tab.
-- Login wall: many offers are gated behind card-member login. Plan to scrape the
-  **public** "offers for prospects" tier first — Amex shows 10-30 promos without
-  a login.
+- **Fetcher:** `StealthFetcher.fetch_rendered_html` with a `pre_visit_url`
+  pointing at `/th/`. This is required. Observed 2026-04-22:
+  - Plain `httpx` → `RemoteProtocolError` (TLS stream reset immediately
+    after SNI). Same for `curl`: HTTP/2 `INTERNAL_ERROR`.
+  - `BrowserFetcher.fetch_rendered_html` cold (no pre-visit) → Playwright
+    navigation timeout at 30 s. Akamai Bot Manager slow-walks the request.
+  - `StealthFetcher` with pre-visit to `/th/` → 200 OK, 1.0 MB of rendered
+    HTML, 45 `div.offer.parbase` tiles. The root sets `_abck` and `bm_sz`
+    cookies that the subsequent navigation presents, passing the bot check.
+- **PROMOTION_URL:** `/th-th/benefits/promotions/dining.html`. The historical
+  `/th/benefits/offers/` path returns a custom "ไม่พบหน้า" (not found) page.
+  `/th/` is the Thai landing page and legitimately links to
+  `/th-th/benefits/promotions/dining.html`.
+- **Selectors:** `.offer.parbase` wraps each tile. Inside every tile:
+  `.offer-header > p` (title), `.offer-desc` (description), `.offer-dates`
+  (date range prefixed with "ระยะเวลา:"), `img.card-detail-image` (image),
+  `a.link-underlined` (image wrap link to detail page). 45 of 45 tiles in
+  the captured HTML parse cleanly.
+- **Date parsing:** Amex uses Western-calendar `DD/MM/YYYY`. A dedicated
+  `_parse_amex_date_range` strips the "ระยะเวลา:" prefix, splits on
+  `-`/`–`/`ถึง`, then tries DD/MM/YYYY, DD-MM-YYYY, ISO, `DD MMM YYYY`, and
+  `DD MMMM YYYY` formats.
+- **Merchant extraction:** Shared Thai preposition heuristic with one Amex
+  twist — if no "ที่" / "ร่วมกับ" hint matches and the title is ≤80 chars,
+  the title itself is used as the merchant (Amex tiles typically ARE the
+  venue name). Longer titles (full-sentence descriptions that happen to sit
+  in the `<p>` slot) return `None` to avoid polluting merchant search.
+  Blocklist suppresses Amex brand names (Amex, American Express, Platinum,
+  อเมริกัน) and Thai month names.
+- **Category:** hard-coded to `"dining"` since this parser is wired to the
+  dining hub only. Walking travel/lifestyle/explore-asia is a clean
+  extension (same DOM shape).
 
-## Fetcher choice
+## Anti-bot notes
 
-**BrowserFetcher with `fetch_with_intercept`** is the recommended first attempt:
+- Akamai Bot Manager IS active. Without stealth warm-up it blocks.
+- `StealthFetcher` already injects the anti-webdriver script + launches with
+  `--disable-blink-features=AutomationControlled`. That plus the pre-visit is
+  enough as of 2026-04-22. If Amex tightens, the next escalation is to
+  randomize viewport/UA per session and add a longer human-like delay after
+  the pre-visit (not needed today).
+- Rate limit: 6 s between requests (twice UOB's rate). Amex's bot manager
+  logs request velocity per source IP, so we stay conservative.
 
-- Plain httpx GET returns a near-empty React shell — confirmed 2026-04-22.
-- The CardX adapter already demonstrates the intercept pattern for an SPA
-  that loads promos via XHR. Copy that structure: capture JSON responses
-  matching `axp-offers`, `api/content`, or `/offers/` URL patterns, then parse
-  from the captured JSON.
-- If BrowserFetcher is blocked by Amex's anti-bot (Akamai Bot Manager is
-  commonly deployed on americanexpress.com), escalate to StealthFetcher.
-- StealthFetcher with `pre_visit_url=BASE_URL` to warm cookies may be required
-  from day one — note Amex uses geolocation + IP reputation checks.
+## Tests
+
+- `tests/adapters/test_amex_parser.py` — 9 tests, all green:
+  - parses 8 cards out of the live fixture
+  - categories and absolute URLs verified
+  - dates parse as `(2026-04-01, 2026-09-30)` from `"ระยะเวลา: 01/04/2026 - 30/09/2026"`
+  - source_id strips `.html`; relative `dining.foo.html` hrefs resolve to absolute
+  - image URLs resolve against BASE_URL
+  - empty HTML → `[]`
+  - `_parse_amex_date_range` with/without "ระยะเวลา:" prefix + invalid input
+  - merchant-extraction: `ที่` heuristic, short-title fallback, blocklist
 
 ## Expected row count
 
-- 10-30 public-facing offers at any time. Member-only tier adds ~50 more but
-  requires auth (out of scope for MVP).
+- 45 dining offers as of 2026-04-22. Other categories add roughly:
+  - travel: ~20–30
+  - lifestyle: ~15–25
+  - explore-asia: ~10–20
+  - **Total Amex TH:** ~90–120 offers when all four hubs are wired up.
 
-## Anti-bot observations
+## Follow-ups (not blockers)
 
-- Akamai Bot Manager almost certainly in front of the page. Expect:
-  - `_abck` and `bm_sz` cookies set on first visit.
-  - Request body fingerprinting for POST calls to the offers API.
-- Mitigations: StealthFetcher + human-like scroll + 6s rate limit.
-- If blocked, fall back to fetching the HTML of `/th/benefits/offers/` directly
-  with a real browser session cookie captured manually, then parse the
-  server-rendered subset (~10 offers visible without JS).
-
-## Test-fixture strategy
-
-- Two fixture files needed:
-  - `tests/fixtures/amex_offers_api.json` — captured JSON from the intercept.
-  - `tests/fixtures/amex_offers.html` — optional fallback for server-rendered
-    parsing if the API path is too heavily protected.
-- Test mirrors `test_cardx_parser.py` shape: feed the captured JSON into the
-  parser, assert 2-3 promos with merchant, discount_type, date range.
-- Amex uses Western-calendar dates (`DD MMM YYYY`), no Thai BE — simpler date
-  parsing than Krungsri/Kasikorn.
-
-## Estimated effort
-
-- Fetcher decision + live capture: **4-6 hours** (Akamai churn is the risk).
-- Parser + tests: **6-8 hours**.
-- Total: **~2 working days** given the anti-bot uncertainty. This is the
-  highest-risk adapter in Phase 2.
-
-## Next steps (when promoted to active work)
-
-1. Open DevTools on the live hub, identify the offers API endpoint.
-2. Try plain BrowserFetcher intercept first. If 403, swap to StealthFetcher.
-3. Capture a real API response into `tests/fixtures/amex_offers_api.json`.
-4. Build `parse_intercepted_data` (CardX signature) in `parser.py`.
-5. Wire up adapter `fetch_promotions` to the CardX pattern (loop over intercept
-   patterns, dedupe, log).
-6. Add `test_amex_parser.py`. Run ruff + pytest before commit.
+1. Loop over the four category URLs in `AmexAdapter.fetch_promotions` and
+   stamp the appropriate `category` per hub (currently hard-coded `"dining"`
+   in the parser — move to adapter-driven or pass-through).
+2. Persist `offer-dates` text verbatim in `raw_data` so downstream consumers
+   can reason about "live now" vs "starts soon" without re-parsing.
+3. If Akamai starts gating `StealthFetcher` too, the next step is
+   [playwright-extra](https://github.com/berstend/puppeteer-extra-plugin-stealth)
+   via a wrapper process, or a paid scraping API. Not needed today.
