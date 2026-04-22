@@ -2,15 +2,51 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
+from urllib.parse import urljoin
 
 import structlog
 from bs4 import BeautifulSoup, Tag
 
-from card_retrieval.adapters.kasikorn.constants import BANK_NAME, BASE_URL, SELECTORS
+from card_retrieval.adapters.kasikorn.constants import BANK_NAME, BASE_URL, PROMOTION_URL, SELECTORS
 from card_retrieval.core.models import Promotion
 from card_retrieval.utils.text import extract_discount, extract_minimum_spend, normalize_thai_text
 
 logger = structlog.get_logger()
+
+_MERCHANT_PATTERNS = [
+    re.compile(
+        r"ที่\s+([A-Z][A-Z0-9\s&.\-']{2,60}|[฀-๿0-9\s&.\-']{3,60}?)"
+        r"(?=\s+\d|\s+ตั้งแต่|\s+วันที่|\s+สาขา|\s*$)"
+    ),
+    re.compile(
+        r"ร่วมกับ\s+([A-Z][A-Z0-9\s&.\-']{2,60}|[฀-๿0-9\s&.\-']{3,60}?)"
+        r"(?=\s+\d|\s+ตั้งแต่|\s*$)"
+    ),
+]
+
+_MERCHANT_BLOCKLIST = re.compile(r"บัตรเครดิต|บัตรเดบิต|K\+?\s*SHOP|KBank|กสิกรไทย", re.IGNORECASE)
+
+
+def _extract_merchant_name(title: str, description: str) -> str | None:
+    text = f"{title} {description}".strip()
+    for pattern in _MERCHANT_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            candidate = m.group(1).strip().rstrip(",.* ")
+            if candidate and not _MERCHANT_BLOCKLIST.search(candidate):
+                return candidate[:255]
+    # ALL-CAPS English prefix often denotes a brand-led promo (e.g. "ASB GREEN VALLEY ผ่อน 0%...")
+    caps_match = re.match(
+        r"^([A-Z][A-Z0-9\s&.\-']{2,60}?)"
+        r"(?=\s+[฀-๿]|\s+ผ่อน|\s+รับ|\s+0%|\s+ผ่อ|\s*$)",
+        title,
+    )
+    if caps_match:
+        candidate = caps_match.group(1).strip()
+        if not _MERCHANT_BLOCKLIST.search(candidate):
+            return candidate
+    return None
+
 
 THAI_MONTHS = {
     "ม.ค.": 1,
@@ -68,18 +104,18 @@ def _parse_card(card: Tag) -> Promotion | None:
         if not title or len(title) < 3:
             return None
 
-        # Link
+        # Link — use urljoin so "../pages/..." and "/abs" and absolute URLs all resolve correctly
         link_el = card.select_one(SELECTORS["link"])
         href = ""
         if link_el:
             href = link_el.get("href", "")
             if isinstance(href, list):
                 href = href[0] if href else ""
-        if href and not href.startswith("http"):
-            href = BASE_URL + href
+        if href:
+            href = urljoin(PROMOTION_URL, href)
 
         source_id = href.rstrip("/").split("/")[-1] if href else title[:80]
-        source_url = href or f"{BASE_URL}/th/promotion/creditcard/Pages/index.aspx"
+        source_url = href or PROMOTION_URL
 
         # Image
         img_el = card.select_one(SELECTORS["image"])
@@ -109,6 +145,7 @@ def _parse_card(card: Tag) -> Promotion | None:
         full_text = title + " " + description
         discount_type, discount_value = extract_discount(full_text)
         minimum_spend = extract_minimum_spend(full_text)
+        merchant_name = _extract_merchant_name(title, description)
 
         return Promotion(
             bank=BANK_NAME,
@@ -117,6 +154,7 @@ def _parse_card(card: Tag) -> Promotion | None:
             title=title,
             description=description,
             image_url=image_url,
+            merchant_name=merchant_name,
             category=category,
             discount_type=discount_type,
             discount_value=discount_value,

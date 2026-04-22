@@ -97,6 +97,7 @@ def parse_promotions_from_html(html: str) -> list[Promotion]:
                     source_id=source_id,
                     source_url=source_url,
                     title=title,
+                    merchant_name=title,
                     image_url=image_url,
                     raw_data={"html_source": True},
                 )
@@ -120,6 +121,20 @@ def _parse_single_promotion(item: dict) -> Promotion | None:
 
         description = item.get("description") or item.get("short_description") or ""
         description = normalize_thai_text(description)
+
+        # KTC promo titles are typically the merchant name itself; JSON may also expose
+        # a dedicated merchant field depending on the page. Try the explicit field first.
+        merchant_raw = (
+            item.get("merchant_name")
+            or item.get("merchantName")
+            or item.get("merchant")
+            or item.get("brand")
+        )
+        if isinstance(merchant_raw, dict):
+            merchant_raw = merchant_raw.get("name") or merchant_raw.get("title")
+        merchant_name = (
+            normalize_thai_text(str(merchant_raw)) if merchant_raw else normalize_thai_text(title)
+        )
 
         image_url = item.get("image") or item.get("thumbnail") or item.get("cover_image")
         if isinstance(image_url, dict):
@@ -151,6 +166,7 @@ def _parse_single_promotion(item: dict) -> Promotion | None:
             title=normalize_thai_text(title),
             description=description,
             image_url=image_url,
+            merchant_name=merchant_name,
             card_types=card_types,
             category=str(category) if category else None,
             discount_type=discount_type,

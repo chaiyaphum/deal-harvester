@@ -60,3 +60,56 @@ def test_parse_next_data_full_page():
     assert data is not None
     promos = parse_promotions_from_next_data(data)
     assert len(promos) == 2  # The HTML fixture has 2 promos in __NEXT_DATA__
+
+
+def _make_ktc_data(items: list[dict]) -> dict:
+    return {"props": {"pageProps": {"promotions": items}}}
+
+
+def test_ktc_merchant_from_explicit_json_field():
+    """When JSON has merchantName, prefer it over title."""
+    data = _make_ktc_data(
+        [
+            {
+                "id": "p1",
+                "slug": "p1",
+                "title": "ลดราคา 50% ที่ร้านดัง",
+                "merchantName": "Starbucks",
+            }
+        ]
+    )
+    promos = parse_promotions_from_next_data(data)
+    assert len(promos) == 1
+    assert promos[0].merchant_name == "Starbucks"
+
+
+def test_ktc_merchant_falls_back_to_title():
+    """When no merchant field, KTC titles usually ARE the merchant."""
+    data = _make_ktc_data(
+        [
+            {
+                "id": "p1",
+                "slug": "p1",
+                "title": "The North Face",
+            }
+        ]
+    )
+    promos = parse_promotions_from_next_data(data)
+    assert len(promos) == 1
+    assert promos[0].merchant_name == "The North Face"
+
+
+def test_ktc_merchant_unwraps_dict_shape():
+    """Some APIs return merchant as {name: ...}; handle that shape."""
+    data = _make_ktc_data(
+        [
+            {
+                "id": "p1",
+                "slug": "p1",
+                "title": "promo title",
+                "merchant": {"name": "Uniqlo", "id": 42},
+            }
+        ]
+    )
+    promos = parse_promotions_from_next_data(data)
+    assert promos[0].merchant_name == "Uniqlo"
