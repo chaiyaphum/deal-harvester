@@ -147,14 +147,26 @@ def _parse_date_range(text: str) -> tuple[date | None, date | None]:
 
 
 def parse_promotions_from_html(html: str) -> list[Promotion]:
-    """Parse promotions from the Krungsri promotion listing page."""
+    """Parse promotions from the Krungsri promotion listing page.
+
+    The live Krungsri promo hub (`/th/promotions/cards/{slug}`) renders each
+    tile as `<div class="card-info item">` wrapping an `<a>` that in turn
+    wraps the image + content blocks. Listing pages do not ship inline date
+    or category metadata — those live on the detail pages. The parser
+    gracefully returns `None` dates/category for listing-sourced promos.
+    """
     soup = BeautifulSoup(html, "lxml")
     promotions: list[Promotion] = []
 
     cards = soup.select(SELECTORS["promotion_card"])
     if not cards:
         # Broad fallback: any element whose class hints at a promotion card.
-        cards = soup.find_all(["a", "article", "div"], class_=re.compile(r"promo|card", re.I))
+        # We intentionally skip bare "card" (used for nav widgets, consent
+        # popups, etc.) to avoid false positives in the live DOM.
+        cards = soup.find_all(
+            ["a", "article", "div"],
+            class_=re.compile(r"promo|card-info|promotion-card", re.I),
+        )
 
     logger.info("krungsri_cards_found", count=len(cards))
 

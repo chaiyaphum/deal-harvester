@@ -97,8 +97,23 @@ def _parse_amex_date_range(text: str) -> tuple[date | None, date | None]:
     return start, end
 
 
-def parse_promotions_from_html(html: str) -> list[Promotion]:
-    """Parse promotions from an Amex TH category hub (e.g., dining)."""
+def parse_promotions_from_html(
+    html: str,
+    category: str = "dining",
+    hub_url: str | None = None,
+) -> list[Promotion]:
+    """Parse promotions from an Amex TH category hub.
+
+    Args:
+        html: The rendered HTML of one of the four promotion hubs.
+        category: `Promotion.category` to stamp on every tile. Defaults to
+            "dining" to preserve back-compat with early callers that only
+            hit the dining hub.
+        hub_url: The URL the HTML was fetched from. Used as the base for
+            resolving relative hrefs (Amex uses hub-relative paths like
+            `dining.foo.html` inside the dining hub). Falls back to the
+            dining URL when not provided.
+    """
     soup = BeautifulSoup(html, "lxml")
     promotions: list[Promotion] = []
 
@@ -107,17 +122,21 @@ def parse_promotions_from_html(html: str) -> list[Promotion]:
         # Fallback if Amex renames the AEM block.
         cards = soup.find_all("div", class_=re.compile(r"offer", re.I))
 
-    logger.info("amex_cards_found", count=len(cards))
+    logger.info("amex_cards_found", count=len(cards), category=category)
 
     for card in cards:
-        promo = _parse_card(card)
+        promo = _parse_card(card, category=category, hub_url=hub_url)
         if promo:
             promotions.append(promo)
 
     return promotions
 
 
-def _parse_card(card: Tag) -> Promotion | None:
+def _parse_card(
+    card: Tag,
+    category: str = "dining",
+    hub_url: str | None = None,
+) -> Promotion | None:
     try:
         # Title lives inside .offer-header > p (not the wrapper div).
         title_el = card.select_one(SELECTORS["title"])
@@ -135,7 +154,7 @@ def _parse_card(card: Tag) -> Promotion | None:
             else:
                 href = raw
         if href:
-            href = urljoin(PROMOTION_URL, href)
+            href = urljoin(hub_url or PROMOTION_URL, href)
 
         # Amex detail-page slugs look like "dining.4k-cafe-cross-vibe-...html"
         # — use the last path segment minus `.html` as the source_id.
@@ -180,7 +199,7 @@ def _parse_card(card: Tag) -> Promotion | None:
             description=description,
             image_url=image_url,
             merchant_name=merchant_name,
-            category="dining",  # This parser is wired to the dining hub only.
+            category=category,
             discount_type=discount_type,
             discount_value=discount_value,
             minimum_spend=minimum_spend,
