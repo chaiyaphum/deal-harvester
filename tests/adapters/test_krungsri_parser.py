@@ -10,46 +10,48 @@ from card_retrieval.adapters.krungsri.parser import (
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
 
-def test_parse_krungsri_promotions():
+def test_parse_krungsri_promotions_from_live_fixture():
+    """Live fixture captured 2026-04-22 from /th/promotions/cards/* categories."""
     html = (FIXTURES / "krungsri_promotions.html").read_text()
     promos = parse_promotions_from_html(html)
 
-    # Four cards in the fixture, all distinct source_ids.
-    assert len(promos) == 4
+    # 11 tiles: 6 hot-promotion + 1 dining + 2 shopping-online + 2 travel.
+    assert len(promos) == 11
 
-    p1 = promos[0]
-    assert p1.bank == "krungsri"
-    assert "Centara" in p1.title
-    assert p1.discount_type == "percentage"
-    assert p1.discount_value == "50%"
-    assert p1.category == "ร้านอาหาร"
-    assert p1.source_url.startswith("https://www.krungsri.com/")
-    assert p1.source_url.endswith("/dining-centara-buffet-50")
-    assert p1.image_url is not None
-    assert p1.image_url.startswith("https://www.krungsri.com/")
+    for p in promos:
+        assert p.bank == "krungsri"
+        assert p.source_url.startswith("https://www.krungsri.com/")
+        assert p.title and len(p.title) >= 3
 
-    # Buddhist-era 2-digit abbreviation: 69 BE = 2026 CE.
-    assert p1.start_date == date(2026, 1, 1)
-    assert p1.end_date == date(2026, 6, 30)
+    by_id = {p.source_id: p for p in promos}
 
-    p2 = promos[1]
-    assert "UNIQLO" in p2.title
-    assert p2.discount_type == "cashback"
-    assert p2.discount_value and "500" in p2.discount_value
-    assert p2.minimum_spend == 5000.0
-    assert p2.merchant_name == "UNIQLO"
+    hotels = by_id["discount-with-hotels"]
+    assert "Hotels.com" in hotels.title
+    assert hotels.discount_type == "percentage"
+    assert hotels.discount_value == "7%"
+    assert hotels.image_url is not None
+    assert hotels.image_url.startswith("https://www.krungsri.com/")
 
-    p3 = promos[2]
-    assert p3.discount_type == "points"
-    # lazy-loaded image (data-src) should still resolve
-    assert p3.image_url is not None
-    # Full 4-digit BE year: 2569 BE = 2026 CE
-    assert p3.start_date == date(2026, 3, 1)
-    assert p3.end_date == date(2027, 2, 28)
+    dining = by_id["dining-discount"]
+    assert dining.discount_type == "percentage"
+    assert dining.discount_value == "20%"
 
-    p4 = promos[3]
-    # <article> wrapper with nested <a> — link must still be captured.
-    assert p4.source_url.endswith("/auto-ptt-fuel-discount")
+    avis = by_id["discount-with-avis"]
+    assert avis.discount_type == "percentage"
+    assert avis.discount_value == "20%"
+
+    # FIFA promo carries no numeric discount — parser should return None cleanly.
+    fifa = by_id["fifa-world-cup-2026"]
+    assert fifa.discount_type is None
+    assert fifa.discount_value is None
+
+    # Listing pages don't ship inline dates or categories — parser must
+    # gracefully surface None for both (the adapter stamps category based on
+    # which hub the tile was fetched from).
+    for p in promos:
+        assert p.start_date is None
+        assert p.end_date is None
+        assert p.category is None
 
 
 def test_parse_empty_html():
