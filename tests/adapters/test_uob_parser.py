@@ -70,8 +70,7 @@ def test_uob_relative_urls_resolved_against_hub():
     promos = parse_promotions_from_html(html)
     assert len(promos) == 1
     assert (
-        promos[0].source_url
-        == "https://www.uob.co.th/personal/promotions/creditcard/sample.page"
+        promos[0].source_url == "https://www.uob.co.th/personal/promotions/creditcard/sample.page"
     )
     assert promos[0].image_url == "https://www.uob.co.th/assets/foo.jpg"
 

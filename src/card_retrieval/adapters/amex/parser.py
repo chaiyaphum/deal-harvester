@@ -37,16 +37,14 @@ _MERCHANT_PATTERNS = [
         r"[A-Z][A-Z0-9\s&.\-']{2,60}"
         r"|[A-Z][a-zA-Z0-9\s&.\-']{2,60}?"
         r"|[฀-๿0-9\s&.\-']{3,60}?"
-        r")"
-        + _MERCHANT_END
+        r")" + _MERCHANT_END
     ),
     re.compile(
         r"ร่วมกับ\s+("
         r"[A-Z][A-Z0-9\s&.\-']{2,60}"
         r"|[A-Z][a-zA-Z0-9\s&.\-']{2,60}?"
         r"|[฀-๿0-9\s&.\-']{3,60}?"
-        r")"
-        + _MERCHANT_END
+        r")" + _MERCHANT_END
     ),
 ]
 
@@ -151,11 +149,7 @@ def _parse_card(card: Tag) -> Promotion | None:
         img_el = card.select_one(SELECTORS["image"])
         image_url: str | None = None
         if img_el:
-            raw_img = (
-                img_el.get("src")
-                or img_el.get("data-src")
-                or img_el.get("data-lazy-src")
-            )
+            raw_img = img_el.get("src") or img_el.get("data-src") or img_el.get("data-lazy-src")
             if isinstance(raw_img, list):
                 image_url = raw_img[0] if raw_img else None
             else:

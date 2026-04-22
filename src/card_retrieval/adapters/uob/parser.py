@@ -34,16 +34,14 @@ _MERCHANT_PATTERNS = [
         r"[A-Z][A-Z0-9\s&.\-']{2,60}"
         r"|[A-Z][a-zA-Z0-9\s&.\-']{2,60}?"
         r"|[฀-๿0-9\s&.\-']{3,60}?"
-        r")"
-        + _MERCHANT_END
+        r")" + _MERCHANT_END
     ),
     re.compile(
         r"ร่วมกับ\s+("
         r"[A-Z][A-Z0-9\s&.\-']{2,60}"
         r"|[A-Z][a-zA-Z0-9\s&.\-']{2,60}?"
         r"|[฀-๿0-9\s&.\-']{3,60}?"
-        r")"
-        + _MERCHANT_END
+        r")" + _MERCHANT_END
     ),
 ]
 
@@ -60,18 +58,30 @@ _MERCHANT_BLOCKLIST = re.compile(
 
 
 THAI_MONTHS = {
-    "ม.ค.": 1, "มกราคม": 1,
-    "ก.พ.": 2, "กุมภาพันธ์": 2,
-    "มี.ค.": 3, "มีนาคม": 3,
-    "เม.ย.": 4, "เมษายน": 4,
-    "พ.ค.": 5, "พฤษภาคม": 5,
-    "มิ.ย.": 6, "มิถุนายน": 6,
-    "ก.ค.": 7, "กรกฎาคม": 7,
-    "ส.ค.": 8, "สิงหาคม": 8,
-    "ก.ย.": 9, "กันยายน": 9,
-    "ต.ค.": 10, "ตุลาคม": 10,
-    "พ.ย.": 11, "พฤศจิกายน": 11,
-    "ธ.ค.": 12, "ธันวาคม": 12,
+    "ม.ค.": 1,
+    "มกราคม": 1,
+    "ก.พ.": 2,
+    "กุมภาพันธ์": 2,
+    "มี.ค.": 3,
+    "มีนาคม": 3,
+    "เม.ย.": 4,
+    "เมษายน": 4,
+    "พ.ค.": 5,
+    "พฤษภาคม": 5,
+    "มิ.ย.": 6,
+    "มิถุนายน": 6,
+    "ก.ค.": 7,
+    "กรกฎาคม": 7,
+    "ส.ค.": 8,
+    "สิงหาคม": 8,
+    "ก.ย.": 9,
+    "กันยายน": 9,
+    "ต.ค.": 10,
+    "ตุลาคม": 10,
+    "พ.ย.": 11,
+    "พฤศจิกายน": 11,
+    "ธ.ค.": 12,
+    "ธันวาคม": 12,
 }
 
 
@@ -139,9 +149,7 @@ def parse_promotions_from_html(html: str) -> list[Promotion]:
     cards = soup.select(SELECTORS["promotion_card"])
     if not cards:
         # Broad fallback if UOB renames the wrapper.
-        cards = soup.find_all(
-            "div", class_=re.compile(r"category-item|promo|card", re.I)
-        )
+        cards = soup.find_all("div", class_=re.compile(r"category-item|promo|card", re.I))
 
     logger.info("uob_cards_found", count=len(cards))
 
@@ -187,11 +195,7 @@ def _parse_card(card: Tag) -> Promotion | None:
         img_el = card.select_one(SELECTORS["image"])
         image_url: str | None = None
         if img_el:
-            raw_img = (
-                img_el.get("src")
-                or img_el.get("data-src")
-                or img_el.get("data-lazy-src")
-            )
+            raw_img = img_el.get("src") or img_el.get("data-src") or img_el.get("data-lazy-src")
             if isinstance(raw_img, list):
                 image_url = raw_img[0] if raw_img else None
             else:

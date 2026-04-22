@@ -88,10 +88,7 @@ def test_bbl_parse_date_range_thai_be_future_ready():
 
 
 def test_bbl_merchant_extraction_thai_at():
-    assert (
-        _extract_merchant_name("เครดิตเงินคืน 10% ที่ Starbucks ทุกสาขา", "")
-        == "Starbucks"
-    )
+    assert _extract_merchant_name("เครดิตเงินคืน 10% ที่ Starbucks ทุกสาขา", "") == "Starbucks"
 
 
 def test_bbl_merchant_extraction_english_at():
