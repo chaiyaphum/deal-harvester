@@ -13,18 +13,40 @@ from card_retrieval.utils.text import extract_discount, extract_minimum_spend, n
 
 logger = structlog.get_logger()
 
+# Shared trailer lookahead — covers every common terminator we've seen on
+# live KBank titles: digits (dates, amounts), Thai verbs that introduce the
+# *promotion body* ("use", "receive", "enough"), Thai prepositions that start
+# the amount clause ("in", "of"), date markers ("since", "on"), the branch
+# marker ("branch"), and end-of-string.  The `|` alternates are greedy-free
+# so the capture group stops at the first terminator.
+_TRAILER = (
+    r"(?=\s+\d|\s+ใช้จ่าย|\s+รับ|\s+ครบ|\s+เมื่อ|\s+ใน|\s+ของ|"
+    r"\s+ตั้งแต่|\s+วันที่|\s+สาขา|\s+ผ่อน|\s+นาน|\s*[\-–]|\s*$)"
+)
+
+# Merchant-name candidate: either an ALL-CAPS English brand ("SUSHIRO",
+# "ASB GREEN VALLEY") or a Thai-script name (brief, 3-60 chars).  Non-greedy
+# so the trailer lookahead can terminate the capture early.
+_MERCHANT_CAND = r"([A-Z][A-Z0-9\s&.\-']{2,60}|[฀-๿0-9\s&.\-']{3,60}?)"
+
 _MERCHANT_PATTERNS = [
-    re.compile(
-        r"ที่\s+([A-Z][A-Z0-9\s&.\-']{2,60}|[฀-๿0-9\s&.\-']{3,60}?)"
-        r"(?=\s+\d|\s+ตั้งแต่|\s+วันที่|\s+สาขา|\s*$)"
-    ),
-    re.compile(
-        r"ร่วมกับ\s+([A-Z][A-Z0-9\s&.\-']{2,60}|[฀-๿0-9\s&.\-']{3,60}?)"
-        r"(?=\s+\d|\s+ตั้งแต่|\s*$)"
-    ),
+    # "ที่ <MERCHANT>" — "at <MERCHANT>"; the most common Thai promo phrasing.
+    re.compile(rf"ที่\s+{_MERCHANT_CAND}{_TRAILER}"),
+    # "ร่วมกับ <MERCHANT>" — "together with <MERCHANT>".
+    re.compile(rf"ร่วมกับ\s+{_MERCHANT_CAND}{_TRAILER}"),
+    # "จาก <MERCHANT>" — "from <MERCHANT>" (gift/voucher promos).
+    re.compile(rf"จาก\s+{_MERCHANT_CAND}{_TRAILER}"),
+    # "กับ <MERCHANT>" — bare "with <MERCHANT>" (tighter than ร่วมกับ so we
+    # run it after).  Disallow "กับ บัตร…" via the blocklist downstream.
+    re.compile(rf"(?<!ร่วม)กับ\s+{_MERCHANT_CAND}{_TRAILER}"),
+    # "@ <MERCHANT>" — common brand-tag on shorter titles.
+    re.compile(rf"@\s*{_MERCHANT_CAND}{_TRAILER}"),
 ]
 
-_MERCHANT_BLOCKLIST = re.compile(r"บัตรเครดิต|บัตรเดบิต|K\+?\s*SHOP|KBank|กสิกรไทย", re.IGNORECASE)
+_MERCHANT_BLOCKLIST = re.compile(
+    r"บัตรเครดิต|บัตรเดบิต|K\+?\s*SHOP|KBank|กสิกรไทย|เครดิตเงินคืน|ร้านค้า",
+    re.IGNORECASE,
+)
 
 
 def _extract_merchant_name(title: str, description: str) -> str | None:
@@ -32,10 +54,12 @@ def _extract_merchant_name(title: str, description: str) -> str | None:
     for pattern in _MERCHANT_PATTERNS:
         m = pattern.search(text)
         if m:
-            candidate = m.group(1).strip().rstrip(",.* ")
+            candidate = m.group(1).strip().rstrip(",.*-– ")
             if candidate and not _MERCHANT_BLOCKLIST.search(candidate):
                 return candidate[:255]
-    # ALL-CAPS English prefix often denotes a brand-led promo (e.g. "ASB GREEN VALLEY ผ่อน 0%...")
+    # ALL-CAPS English prefix often denotes a brand-led promo (e.g.
+    # "ASB GREEN VALLEY ผ่อน 0%…").  Keep this check last so the preposition
+    # patterns win for titles that have both.
     caps_match = re.match(
         r"^([A-Z][A-Z0-9\s&.\-']{2,60}?)"
         r"(?=\s+[฀-๿]|\s+ผ่อน|\s+รับ|\s+0%|\s+ผ่อ|\s*$)",

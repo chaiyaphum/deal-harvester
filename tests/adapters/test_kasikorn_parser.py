@@ -123,3 +123,69 @@ def test_merchant_extraction_returns_none_when_no_hint():
         )
         is None
     )
+
+
+def test_merchant_extraction_thai_preposition_from():
+    """Titles with 'จาก X' ("from X") should yield X as merchant."""
+    assert (
+        _extract_merchant_name(
+            "รับของสมนาคุณ จาก STARBUCKS เมื่อใช้จ่ายครบ 500 บาท",
+            "",
+        )
+        == "STARBUCKS"
+    )
+
+
+def test_merchant_extraction_thai_preposition_bare_kap():
+    """Bare 'กับ <MERCHANT>' should match — distinct from 'ร่วมกับ'."""
+    assert (
+        _extract_merchant_name(
+            "ส่วนลด 20% กับ SUSHIRO เมื่อใช้จ่าย 1,000 บาท",
+            "",
+        )
+        == "SUSHIRO"
+    )
+
+
+def test_merchant_extraction_ruamkap_still_matches():
+    """'ร่วมกับ' branch still wins over bare 'กับ' (regression check)."""
+    assert (
+        _extract_merchant_name(
+            "แคมเปญพิเศษ ร่วมกับ SIZZLER ตั้งแต่ 1 ม.ค. 69",
+            "",
+        )
+        == "SIZZLER"
+    )
+
+
+def test_merchant_extraction_at_prefix():
+    """'@ <MERCHANT>' brand-tag form should match."""
+    assert (
+        _extract_merchant_name(
+            "ส่วนลด 15% @ SHABUSHI เมื่อใช้จ่าย 800 บาท",
+            "",
+        )
+        == "SHABUSHI"
+    )
+
+
+def test_merchant_extraction_blocklist_blocks_kap_credit_card():
+    """'กับ บัตรเครดิตกสิกรไทย' must NOT leak as merchant (bare-กับ regression)."""
+    assert (
+        _extract_merchant_name(
+            "รับคะแนนสะสม 3 เท่า กับ บัตรเครดิตกสิกรไทย",
+            "",
+        )
+        is None
+    )
+
+
+def test_merchant_extraction_trailer_stops_at_amount_verb():
+    """Capture must stop at 'ใช้จ่าย' — a common terminator."""
+    assert (
+        _extract_merchant_name(
+            "ที่ AFTER YOU ใช้จ่ายครบ 500 บาท รับส่วนลด 10%",
+            "",
+        )
+        == "AFTER YOU"
+    )
